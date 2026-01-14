@@ -1,0 +1,5 @@
+downloads/
+__pycache__/
+*.pyc
+kit_data.json
+temp_kit_data.json

@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neka Character Creator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 20px;
+            padding: 30px;
+        }
+
+        .canvas-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #character-canvas {
+            border: 3px solid #e0e0e0;
+            border-radius: 15px;
+            background:
+                repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 20px 20px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .kit-selector-area {
+            margin-bottom: 5px;
+        }
+
+        #kit-selector {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            background: #f9f9f9;
+            font-size: 14px;
+            color: #333;
+            outline: none;
+            cursor: pointer;
+            transition: border-color 0.3s;
+        }
+
+        #kit-selector:focus {
+            border-color: #667eea;
+        }
+
+        .part-navigation {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .part-navigation h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .nav-icons {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 10px;
+        }
+
+        .nav-icon {
+            aspect-ratio: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            overflow: hidden;
+            background: white;
+            position: relative;
+        }
+
+        .nav-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .nav-icon:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .nav-icon.active {
+            border-color: #667eea;
+            border-width: 3px;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .nav-icon .label {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            font-size: 10px;
+            padding: 2px;
+            text-align: center;
+        }
+
+        .item-selector {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .item-selector h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .item-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+        }
+
+        .item-option {
+            aspect-ratio: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            overflow: hidden;
+            background: white;
+            position: relative;
+        }
+
+        .item-option img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .item-option:hover {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+
+        .item-option.active {
+            border-color: #667eea;
+            border-width: 3px;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .color-selector {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 15px;
+        }
+
+        .color-selector h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 16px;
+        }
+
+        .color-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+            gap: 8px;
+        }
+
+        .color-option {
+            aspect-ratio: 1;
+            border: 2px solid #e0e0e0;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+
+        .color-option.active {
+            border-color: #667eea;
+            border-width: 3px;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 968px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎨 Neka Character Creator</h1>
+            <p>Tạo nhân vật của riêng bạn</p>
+        </div>
+
+        <div class="main-content">
+            <div class="canvas-area">
+                <canvas id="character-canvas" width="600" height="800"></canvas>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="exportCharacter()">📥 Tải xuống</button>
+                    <button class="btn btn-secondary" onclick="resetCharacter()">🔄 Làm mới</button>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="kit-selector-area">
+                    <h3>Bộ sưu tập (Kit)</h3>
+                    <select id="kit-selector" onchange="switchKit(this.value)">
+                        <option value="">Đang tải danh sách...</option>
+                    </select>
+                </div>
+
+                <div class="part-navigation">
+                    <h3>Chọn bộ phận</h3>
+                    <div class="nav-icons" id="nav-icons"></div>
+                </div>
+
+                <div class="item-selector">
+                    <h3 id="current-part-name">Chọn một bộ phận</h3>
+                    <div class="item-grid" id="item-grid"></div>
+                </div>
+
+                <div class="color-selector">
+                    <h3>Chọn màu</h3>
+                    <div class="color-grid" id="color-grid"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        let KIT_BASE_PATH = 'downloads/';
+        let CURRENT_KIT_FOLDER = '⑨牌pc贩卖二号机_13430';
+        let KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
+
+        // State
+        let metadata = null;
+        let kits = [];
+        let currentPart = null;
+        let currentItem = null;
+        let currentColor = null;
+        let currentColorIndex = 0;
+        let characterLayers = {};
+
+        // Canvas
+        const canvas = document.getElementById('character-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Load Kits list
+        async function loadKitsList() {
+            try {
+                const response = await fetch('kits.json');
+                kits = await response.json();
+
+                if (kits.length > 0) {
+                    // Auto-select the first kit
+                    const firstKit = kits[0];
+                    CURRENT_KIT_FOLDER = firstKit.folder;
+                    KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
+                }
+
+                const selector = document.getElementById('kit-selector');
+                selector.innerHTML = '';
+
+                kits.forEach(kit => {
+                    const option = document.createElement('option');
+                    option.value = kit.folder;
+                    option.textContent = kit.name;
+                    if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
+                    selector.appendChild(option);
+                });
+
+                loadMetadata();
+            } catch (error) {
+                console.error('Error loading kits list:', error);
+                // Fallback to current hardcoded kit if kits.json fails
+                loadMetadata();
+            }
+        }
+
+        // Switch Kit
+        function switchKit(folderName) {
+            if (!folderName || folderName === CURRENT_KIT_FOLDER) return;
+
+            CURRENT_KIT_FOLDER = folderName;
+            KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
+
+            // Reset character
+            resetCharacter();
+
+            // Reload metadata for new kit
+            loadMetadata();
+        }
+
+        // Load metadata
+        async function loadMetadata() {
+            try {
+                const response = await fetch(`${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/metadata.json`);
+                metadata = await response.json();
+                initializeApp();
+            } catch (error) {
+                console.error('Error loading metadata:', error);
+            }
+        }
+
+        // Initialize app
+        function initializeApp() {
+            const parts = metadata.data.parts;
+            const layerHeights = metadata.data.layerHeights || [];
+            const lhMap = {};
+            layerHeights.forEach((lh, i) => lhMap[lh.id] = i);
+
+            const navContainer = document.getElementById('nav-icons');
+            navContainer.innerHTML = '';
+
+            parts.forEach((part, index) => {
+                const zIndex = part.zIndex || 0;
+                const lhId = part.layerHeight || 'default';
+                const x = lhMap[lhId] !== undefined ? lhMap[lhId] : zIndex;
+                const y = index + 1;
+                const folderName = `${x}-${y}`;
+
+                const navIcon = document.createElement('div');
+                navIcon.className = 'nav-icon';
+                navIcon.dataset.partIndex = index;
+                navIcon.dataset.folderName = folderName;
+
+                const img = document.createElement('img');
+                img.src = `${KIT_PATH}${folderName}/nav.png`;
+                img.alt = part.name;
+                img.onerror = () => img.style.display = 'none';
+
+                const label = document.createElement('div');
+                label.className = 'label';
+                label.textContent = `${x}-${y}`;
+
+                navIcon.appendChild(img);
+                navIcon.appendChild(label);
+                navIcon.onclick = () => selectPart(index, folderName, part);
+
+                navContainer.appendChild(navIcon);
+            });
+        }
+
+        // Select part
+        function selectPart(index, folderName, part) {
+            currentPart = { index, folderName, part };
+
+            // Update active nav icon
+            document.querySelectorAll('.nav-icon').forEach(icon => {
+                icon.classList.remove('active');
+            });
+            document.querySelector(`[data-part-index="${index}"]`).classList.add('active');
+
+            // Update part name
+            document.getElementById('current-part-name').textContent = part.name;
+
+            // Reset item to 0 for new part
+            currentItem = 0;
+
+            // Load items
+            loadItems(folderName, part);
+
+            // Load colors
+            loadColors(folderName, part);
+        }
+
+        // Load items for current part
+        async function loadItems(folderName, part) {
+            const itemGrid = document.getElementById('item-grid');
+            itemGrid.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải...</div>';
+
+            const items = part.items;
+            itemGrid.innerHTML = '';
+
+            items.forEach((itemLayers, itemIndex) => {
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'item-option';
+                itemDiv.dataset.itemIndex = itemIndex;
+
+                const img = document.createElement('img');
+                // Use thumbnail file: thumb_1.png, thumb_2.png, etc.
+                const imagePath = `${KIT_PATH}${folderName}/thumb_${itemIndex + 1}.png`;
+                img.src = imagePath;
+                img.onerror = () => {
+                    // Fallback: try to use first image from first color folder
+                    console.log(`Thumbnail not found: ${imagePath}`);
+                    itemDiv.style.display = 'none';
+                };
+
+                itemDiv.appendChild(img);
+                itemDiv.onclick = () => selectItem(itemIndex, folderName);
+
+                itemGrid.appendChild(itemDiv);
+            });
+        }
+
+        // Get color folders
+        async function getColorFolders(folderName) {
+            // This is a workaround - in real implementation, you'd need a directory listing
+            // For now, we'll use the toning data from metadata
+            const part = currentPart.part;
+            const toningId = part.toning;
+
+            if (!toningId) return ['default'];
+
+            const toning = metadata.data.tonings.find(t => t.id === toningId);
+            if (!toning || !toning.filters) return ['default'];
+
+            return toning.filters.map((filter, index) => {
+                const gradients = filter.gradients || [];
+                const lastColor = gradients[gradients.length - 1]?.color || '#000000';
+                return lastColor.replace('#', '').toUpperCase();
+            });
+        }
+
+        // Load colors
+        async function loadColors(folderName, part) {
+            const colorGrid = document.getElementById('color-grid');
+            colorGrid.innerHTML = '';
+
+            const colors = await getColorFolders(folderName);
+
+            colors.forEach((colorCode, index) => {
+                const colorDiv = document.createElement('div');
+                colorDiv.className = 'color-option';
+                colorDiv.dataset.colorIndex = index;
+
+                if (colorCode === 'default') {
+                    colorDiv.style.background = '#ccc';
+                    colorDiv.classList.add('default-color');
+                    colorDiv.title = 'Màu mặc định';
+                } else {
+                    colorDiv.style.background = `#${colorCode}`;
+                    colorDiv.title = `#${colorCode}`;
+                }
+
+                colorDiv.dataset.colorCode = colorCode;
+                colorDiv.onclick = () => selectColor(colorCode);
+
+                colorGrid.appendChild(colorDiv);
+            });
+
+            // Select first color by default
+            if (colors.length > 0) {
+                selectColor(colors[0]);
+            }
+        }
+
+        // Select item
+        function selectItem(itemIndex, folderName) {
+            currentItem = itemIndex;
+
+            document.querySelectorAll('.item-option').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelector(`[data-item-index="${itemIndex}"]`)?.classList.add('active');
+
+            // Auto-select first color if not already selected
+            if (!currentColor) {
+                const firstColorOption = document.querySelector('.color-option');
+                if (firstColorOption) {
+                    const firstColorCode = firstColorOption.dataset.colorCode;
+                    selectColor(firstColorCode);
+                }
+            } else {
+                // Update with current color
+                updateCharacter();
+            }
+        }
+
+        // Select color
+        function selectColor(colorCode) {
+            currentColor = colorCode;
+
+            const option = document.querySelector(`[data-color-code="${colorCode}"]`);
+            currentColorIndex = option ? parseInt(option.dataset.colorIndex) : 0;
+
+            document.querySelectorAll('.color-option').forEach(color => {
+                color.classList.remove('active');
+            });
+            if (option) option.classList.add('active');
+
+            updateCharacter();
+        }
+
+        // Update character
+        async function updateCharacter() {
+            if (!currentPart || currentItem === null || !currentColor) return;
+
+            const folderName = currentPart.folderName;
+            const zIndex = currentPart.part.zIndex || currentPart.index;
+
+            // Load all layers for this item
+            const itemLayers = currentPart.part.items[currentItem];
+            if (!itemLayers) {
+                console.warn(`Item ${currentItem} not found in part ${currentPart.part.name}`);
+                return;
+            }
+            const layerCount = Array.isArray(itemLayers) ? itemLayers.length : 1;
+
+            // Calculate offset: sum of layers of all previous items in this part
+            let offset = 0;
+            for (let i = 0; i < currentItem; i++) {
+                const prevItemLayers = currentPart.part.items[i];
+                offset += Array.isArray(prevItemLayers) ? prevItemLayers.length : 1;
+            }
+
+            // Get base height from layerHeights metadata
+            const layerHeights = metadata.data.layerHeights || [];
+            const layerHeightId = currentPart.part.layerHeight || 'default';
+            const heightIndex = layerHeights.findIndex(lh => lh.id === layerHeightId);
+
+            // sortOrder = (Base Layer Height Index * 1000) + (zIndex offset) + (insertion order/index)
+            // This ensures parts in lower 'heights' are drawn first.
+            const sortOrder = (heightIndex !== -1 ? heightIndex : 999) * 10000 +
+                (zIndex * 100) +
+                currentPart.index;
+
+            // Check if part is flattened (1 item + multiple colors)
+            const numItems = currentPart.part.items.length;
+            const numColors = (await getColorFolders(folderName)).length;
+            const isFlattened = (numItems === 1 && numColors > 1);
+
+            // Key by part index to avoid overwriting parts with same zIndex
+            characterLayers[currentPart.index] = {
+                folderName,
+                color: currentColor,
+                colorIndex: currentColorIndex,
+                isFlattened: isFlattened,
+                layerCount,
+                offset: offset,
+                sortOrder: sortOrder
+            };
+
+            renderCharacter();
+        }
+
+        // Render character
+        async function renderCharacter() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Sort by sortOrder (zIndex)
+            const sortedLayers = Object.values(characterLayers).sort((a, b) => a.sortOrder - b.sortOrder);
+
+            for (const layer of sortedLayers) {
+                const { folderName, color, colorIndex, isFlattened, layerCount, offset } = layer;
+
+                // Load and draw each layer
+                for (let i = 1; i <= layerCount; i++) {
+                    let layerNumber;
+                    let colorPath;
+
+                    if (isFlattened) {
+                        // In flattened mode, images for all colors are in the root
+                        // Index = (selectedColorIndex * layersPerItem) + localLayerOffset
+                        layerNumber = (colorIndex * layerCount) + i;
+                        colorPath = '';
+                    } else {
+                        layerNumber = offset + i;
+                        colorPath = (color === 'default' || !color) ? '' : `${color}/`;
+                    }
+
+                    const imagePath = `${KIT_PATH}${folderName}/${colorPath}${layerNumber}.png`;
+
+                    try {
+                        const img = await loadImage(imagePath);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    } catch (error) {
+                        console.error(`Failed to load: ${imagePath}`);
+                    }
+                }
+            }
+        }
+
+        // Load image helper
+        function loadImage(src) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        }
+
+        // Export character
+        function exportCharacter() {
+            const link = document.createElement('a');
+            link.download = 'my-character.png';
+            link.href = canvas.toDataURL();
+            link.click();
+        }
+
+        // Reset character
+        function resetCharacter() {
+            characterLayers = {};
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            currentPart = null;
+            currentItem = null;
+            currentColor = null;
+
+            document.querySelectorAll('.nav-icon, .item-option, .color-option').forEach(el => {
+                el.classList.remove('active');
+            });
+
+            document.getElementById('item-grid').innerHTML = '';
+            document.getElementById('color-grid').innerHTML = '';
+            document.getElementById('current-part-name').textContent = 'Chọn một bộ phận';
+        }
+
+        // Initialize on load
+        loadKitsList();
+    </script>
+</body>
+
+</html>
