@@ -17,6 +17,9 @@ try:
 except ImportError:
     webdriver = None
 
+import concurrent.futures
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 # ============= GRADIENT MAPPING FUNCTIONS =============
 
 def decode_b62(s):
@@ -233,9 +236,56 @@ def get_clean_data_via_browser(url, output_file):
         except: pass
         return None
 
+# ============= HELPER FUNCTIONS FOR THREADING =============
+
+def download_with_retry(url, dest_path, timeout=30, retries=3):
+    for i in range(retries):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            if resp.status_code == 200:
+                with open(dest_path, 'wb') as f:
+                    f.write(resp.content)
+                return True
+            else:
+                print(f"  [Retry {i+1}/{retries}] Failed {url}: {resp.status_code}")
+        except Exception as e:
+            print(f"  [Retry {i+1}/{retries}] Error downloading {url}: {e}")
+        time.sleep(2)
+    return False
+
+def process_blob_task(task):
+    blob = task['blob']
+    current_lut = task['lut']
+    filepath = task['filepath']
+    cache_dir = task['cache_dir']
+    
+    if os.path.exists(filepath):
+        return False
+
+    url = f"https://img2.neka.cc/{blob}"
+    cache_path = os.path.join(cache_dir, f"{blob}.png")
+    
+    # Check cache first
+    if not os.path.exists(cache_path):
+        success = download_with_retry(url, cache_path)
+        if not success:
+            return False
+            
+    try:
+        if current_lut:
+            apply_gradient(cache_path, current_lut, filepath)
+        else:
+            shutil.copy2(cache_path, filepath)
+        return True
+    except Exception as e:
+        print(f"  Error processing blob {blob}: {e}")
+        return False
+
 # ============= REORGANIZE KIT =============
 
 def get_color_code_from_filter(filter_data):
+    if not isinstance(filter_data, dict):
+        return "default"
     gradients = filter_data.get('gradients', [])
     if not gradients: return "default"
     selected_color = gradients[-1].get('color', '000000')
@@ -266,6 +316,8 @@ def reorganize_kit(metadata_path):
         seen_colors = {}  # Track color codes and their counts
         
         for filter_idx, f_data in enumerate(filters):
+            if not isinstance(f_data, dict):
+                continue
             code = get_color_code_from_filter(f_data)
             
             # Check if this color already exists
