@@ -314,8 +314,7 @@ def reorganize_kit(metadata_path):
     parts = data.get('parts', [])
     tonings = data.get('tonings', [])
     layer_heights = data.get('layerHeights', [])
-    lh_map = {lh.get('id'): idx for idx, lh in enumerate(layer_heights)}
-    
+    lh_map = {lh.get('id'): idx + 1 for idx, lh in enumerate(layer_heights)}
     toning_map = {}
     for t in tonings:
         # Safety check: kit 14368 has strings in tonings array
@@ -349,9 +348,30 @@ def reorganize_kit(metadata_path):
         
     print(f"Loaded {len(toning_map)} tonings.")
     
-    # Pre-map addon tonings if any part/item defines its own
-    # Some kits have tonings defined elsewhere or special overrides
-    # For now we rely on toning_map populated from data['tonings']
+    # --- New Logic: Calculate strictly sequential X based on drawing order ---
+    # 1. Collect sorting info for all parts
+    part_order_info = []
+    for idx, part in enumerate(parts):
+        if not isinstance(part, dict):
+            continue
+        lh_id = part.get('layerHeight', 'default')
+        # Use existing lh_map (which starts from 1) or fallback to zIndex
+        x_val = lh_map.get(lh_id, part.get('zIndex', 0))
+        part_order_info.append({
+            'original_idx': idx,
+            'x_val': x_val,
+            'z_index': part.get('zIndex', 0)
+        })
+
+    # 2. Sort parts by X (layerHeight index), then zIndex, then original position
+    part_order_info.sort(key=lambda item: (item['x_val'], item['z_index'], item['original_idx']))
+
+    # 3. Map original_idx to a unique sequential X (1, 2, 3...)
+    sequential_x_map = {}
+    for seq_idx, info in enumerate(part_order_info):
+        sequential_x_map[info['original_idx']] = seq_idx + 1
+
+    # --- End New Logic ---
     
     total_files = 0
     
@@ -362,9 +382,8 @@ def reorganize_kit(metadata_path):
         part_zindex = part.get('zIndex', 0)
         nav_position = part_idx + 1  # Y: navigation position (1-indexed)
         
-        # X: Use layerHeight index if available, else zIndex
-        lh_id = part.get('layerHeight', 'default')
-        x_value = lh_map.get(lh_id, part_zindex)
+        # Use strictly sequential X from our map
+        x_value = sequential_x_map.get(part_idx, part_idx + 1)
         
         # Format: X-Y only
         folder_name = f"{x_value}-{nav_position}"

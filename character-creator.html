@@ -340,6 +340,9 @@
                 <div class="controls">
                     <button class="btn btn-secondary" onclick="randomizeCharacter()">🎲 Random</button>
                 </div>
+                <div id="debug-info">
+                  
+                </div>
             </div>
 
             <div class="sidebar">
@@ -473,9 +476,14 @@
             const countLayer = document.getElementById('count-layer');
             navContainer.innerHTML = '';
             countLayer.innerHTML = '';
+            const xFolders = {}; // X -> [folder1, folder2, ...]
+
             kitStructure.forEach((part, index) => {
-              
-                
+                if (!xFolders[part.x]) {
+                    xFolders[part.x] = [];
+                }
+                xFolders[part.x].push(part.folder);
+
                 const navIcon = document.createElement('div');
                 navIcon.className = 'nav-icon';
                 navIcon.dataset.partIndex = index;
@@ -502,6 +510,19 @@
                     internalSelectItem(index, 1, part, firstColor, 0);
                 }
             });
+
+            const debugInfo = document.getElementById('debug-info');
+            const duplicates = Object.entries(xFolders).filter(([x, folders]) => folders.length > 1);
+            
+            if (duplicates.length > 0) {
+                let warningMsg = '';
+                duplicates.forEach(([x, folders]) => {
+                    warningMsg += `- X=${x}: Thư mục [${folders.join(', ')}]<br>`;
+                });
+                debugInfo.innerHTML = `<div style="padding: 12px; background: #fff3f3; border: 1px solid #ffcccc; color: #d63031; border-radius: 8px; font-size: 13px; margin-top: 10px; width: 100%; text-align: left; line-height: 1.5;">${warningMsg}</div>`;
+            } else {
+                debugInfo.innerHTML = '';
+            }
 
             // Select first part in UI
             if (kitStructure.length > 0) {
