@@ -52,7 +52,14 @@ def create_gradient_lut(gradients):
         parsed.append((off, hex_to_rgb(g['color'])))
     
     parsed.sort(key=lambda x: x[0])
-    if not parsed: return [(i, (0,0,0)) for i in range(256)]
+    
+    # If all offsets are the same (e.g., all 0), distribute them evenly from 0.0 to 1.0
+    if len(parsed) > 1 and all(p[0] == parsed[0][0] for p in parsed):
+        num = len(parsed)
+        for i in range(num):
+            parsed[i] = (i / (num - 1), parsed[i][1])
+
+    if not parsed: return [(0,0,0)] * 256
 
     lut = []
     for i in range(256):
@@ -288,10 +295,16 @@ def get_color_code_from_filter(filter_data):
         return "default"
     gradients = filter_data.get('gradients', [])
     if not gradients: return "default"
-    selected_color = gradients[-1].get('color', '000000')
-    return selected_color.replace('#', '').upper()
+    
+    # Try to find a meaningful color from the gradient
+    main_color = gradients[0].get('color', '000000')
+    if len(gradients) > 1 and main_color.lower() in ['#ffffff', '#000000']:
+        main_color = gradients[-1].get('color', '000000')
+        
+    return main_color.replace('#', '').upper()
 
 def reorganize_kit(metadata_path):
+    print(f"DEBUG: reorganize_kit called with {metadata_path}")
     base_dir = os.path.dirname(metadata_path)
     
     with open(metadata_path, 'r', encoding='utf-8') as f:
@@ -313,20 +326,19 @@ def reorganize_kit(metadata_path):
         filters = t.get('filters', [])
         
         processed_colors = []
-        seen_colors = {}  # Track color codes and their counts
+        seen_codes = {}
         
         for filter_idx, f_data in enumerate(filters):
             if not isinstance(f_data, dict):
                 continue
-            code = get_color_code_from_filter(f_data)
+            base_code = get_color_code_from_filter(f_data)
             
-            # Check if this color already exists
-            if code in seen_colors:
-                # Skip duplicate colors
-                continue
+            if base_code in seen_codes:
+                seen_codes[base_code] += 1
+                folder_code = f"{base_code}_{seen_codes[base_code]}"
             else:
-                seen_colors[code] = 1
-                folder_code = code
+                seen_codes[base_code] = 1
+                folder_code = base_code
             
             processed_colors.append({
                 "code": folder_code,
@@ -344,6 +356,8 @@ def reorganize_kit(metadata_path):
     total_files = 0
     
     for part_idx, part in enumerate(parts):
+        if not isinstance(part, dict):
+            continue
         part_name = part.get('name', 'unnamed').replace(' ', '_').replace('/', '-')
         part_zindex = part.get('zIndex', 0)
         nav_position = part_idx + 1  # Y: navigation position (1-indexed)
@@ -356,24 +370,44 @@ def reorganize_kit(metadata_path):
         folder_name = f"{x_value}-{nav_position}"
         
         part_toning_id = part.get('toning')
+        toning_ids = set()
+        if part_toning_id:
+            toning_ids.add(part_toning_id)
+        
+        # Also check addonLayers for more tonings
+        addon_layers = part.get('addonLayers', [])
+        if isinstance(addon_layers, list):
+            for al in addon_layers:
+                if isinstance(al, dict):
+                    al_toning = al.get('toning')
+                    if al_toning:
+                        toning_ids.add(al_toning)
+
         items = part.get('items', [])
-        
-        # Decide if we "flatten" this part: 1 item AND multiple colors
-        # Note: if it has 1 item and 1 color, it's effectively the same logic.
         num_items = len(items)
+
+        # Collect all unique colors from all tonings
+        all_colors_dict = {} # code -> color_data
+        for t_id in toning_ids:
+            colors_for_tid = toning_map.get(t_id, [])
+            for c in colors_for_tid:
+                code = c["code"]
+                if code not in all_colors_dict:
+                    all_colors_dict[code] = c
         
-        colors = toning_map.get(part_toning_id, [])
+        colors = list(all_colors_dict.values())
         if not colors:
             colors = [{"code": "default", "gradients": []}]
         
         is_flattened = (num_items == 1 and len(colors) > 1)
         
-        print(f"Processing Part: {folder_name} ({num_items} items, {len(colors)} colors, flattened={is_flattened})")
+        print(f"> Processing Part: {folder_name} | Items: {num_items} | Colors: {len(colors)} | Flattened: {is_flattened}")
         
         # Download navigation icon (cover image) first
         part_cover = part.get('cover')
         if part_cover:
-            # Create base folder for this part
+        
+        # Determine colors for this part
             base_part_dir = os.path.join(base_dir, "items_structured", folder_name)
             if not os.path.exists(base_part_dir):
                 os.makedirs(base_part_dir)
@@ -455,7 +489,9 @@ def reorganize_kit(metadata_path):
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
             
-            # Counter for sequential naming per folder
+            # Sequential naming: 1.png, 2.png...
+            # If not flattened, each color has its own folder, so reset.
+            # If flattened, they all go in the same folder, so DON'T reset.
             if not is_flattened:
                 file_counter = 1
             
@@ -465,6 +501,8 @@ def reorganize_kit(metadata_path):
                 # Combine main layers with addonTextures and addonLayers (if simple)
                 all_blobs_to_process = []
                 for layer in item_layers:
+                    if not isinstance(layer, dict):
+                        continue
                     # 1. Main blob
                     if layer.get('blob'):
                         all_blobs_to_process.append({
@@ -492,6 +530,7 @@ def reorganize_kit(metadata_path):
                     filepath = os.path.join(target_dir, filename)
                     
                     if os.path.exists(filepath):
+                        # Even if file exists, we MUST increment the counter to avoid skipping subsequent colors/items
                         file_counter += 1
                         continue
                         
@@ -559,7 +598,8 @@ if __name__ == "__main__":
     kit_id = str(kit.get('id', 'unknown_id'))
     
     # Step 3: Create final directory structure
-    base_dir = os.path.join("downloads", f"{kit_name}_{kit_id}")
+    # Use ID-only naming to avoid Chinese characters in folder names
+    base_dir = os.path.join("downloads", f"neka_{kit_id}")
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     

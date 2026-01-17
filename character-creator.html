@@ -14,8 +14,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
+         
             display: flex;
             justify-content: center;
             align-items: center;
@@ -32,7 +31,7 @@
         }
 
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #5db5ef;
             color: white;
             padding: 20px 30px;
             text-align: center;
@@ -50,7 +49,7 @@
 
         .main-content {
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: 1fr 1000px;
             gap: 20px;
             padding: 30px;
         }
@@ -147,11 +146,12 @@
 
         .nav-icons {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
             gap: 10px;
         }
 
         .nav-icon {
+            width: 50px;
             aspect-ratio: 1;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
@@ -207,7 +207,7 @@
 
         .item-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
             gap: 10px;
         }
 
@@ -237,6 +237,20 @@
             border-color: #667eea;
             border-width: 3px;
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+        }
+
+        .item-none {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #ccc;
+            font-weight: 300;
+            background: #fdfdfd !important;
+        }
+
+        .item-none::before {
+            content: "✕";
         }
 
         .color-selector {
@@ -307,40 +321,48 @@
                 grid-template-columns: 1fr;
             }
         }
+        .container-full{
+            width: 100%;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
+    <div class="container-full">
         <div class="header">
-            <h1>🎨 Neka Character Creator</h1>
-            <p>Tạo nhân vật của riêng bạn</p>
+            <h1>Test Neka Character Creator</h1>
+            <p></p>
         </div>
 
         <div class="main-content">
             <div class="canvas-area">
-                <canvas id="character-canvas" width="600" height="800"></canvas>
+                <canvas id="character-canvas" width="400" height="400"></canvas>
                 <div class="controls">
-                    <button class="btn btn-primary" onclick="exportCharacter()">📥 Tải xuống</button>
-                    <button class="btn btn-secondary" onclick="resetCharacter()">🔄 Làm mới</button>
+                    <button class="btn btn-secondary" onclick="randomizeCharacter()">🎲 Random</button>
                 </div>
             </div>
 
             <div class="sidebar">
                 <div class="kit-selector-area">
-                    <h3>Bộ sưu tập (Kit)</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <h3>Bộ sưu tập</h3>
+                        <button class="btn" style="background: #667eea; color: white; padding: 5px 10px; font-size: 12px;" onclick="promptZipKit()">📦 Data (ZIP)</button>
+                    </div>
                     <select id="kit-selector" onchange="switchKit(this.value)">
                         <option value="">Đang tải danh sách...</option>
                     </select>
                 </div>
 
                 <div class="part-navigation">
-                    <h3>Chọn bộ phận</h3>
+                    <h3>Chọn bộ phận <span id="count-layer"></span></h3>
                     <div class="nav-icons" id="nav-icons"></div>
                 </div>
 
                 <div class="item-selector">
-                    <h3 id="current-part-name">Chọn một bộ phận</h3>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 id="current-part-name">Chọn một bộ phận</h3>
+                        <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa bộ phận này</button>
+                    </div>
                     <div class="item-grid" id="item-grid"></div>
                 </div>
 
@@ -355,11 +377,11 @@
     <script>
         // Configuration
         let KIT_BASE_PATH = 'downloads/';
-        let CURRENT_KIT_FOLDER = '⑨牌pc贩卖二号机_13430';
-        let KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
+        let CURRENT_KIT_FOLDER = ''; // Set dynamically
+        let KIT_PATH = ''; // Set dynamically
 
         // State
-        let metadata = null;
+        let kitStructure = null; // Changed from metadata
         let kits = [];
         let currentPart = null;
         let currentItem = null;
@@ -395,81 +417,115 @@
                     selector.appendChild(option);
                 });
 
-                loadMetadata();
+                loadKitStructure();
             } catch (error) {
                 console.error('Error loading kits list:', error);
                 // Fallback to current hardcoded kit if kits.json fails
-                loadMetadata();
+                loadKitStructure();
             }
         }
 
         // Switch Kit
         function switchKit(folderName) {
-            if (!folderName || folderName === CURRENT_KIT_FOLDER) return;
+            if (!folderName) return;
 
             CURRENT_KIT_FOLDER = folderName;
             KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
 
-            // Reset character
+            // Clear current kit structure to trigger fresh load
+            kitStructure = null;
+            
+            // Reset character UI
             resetCharacter();
 
-            // Reload metadata for new kit
-            loadMetadata();
+            // Reload kit structure for new kit
+            loadKitStructure();
         }
 
-        // Load metadata
-        async function loadMetadata() {
+        // Load kit structure from folder API
+        async function loadKitStructure() {
             try {
-                const response = await fetch(`${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/metadata.json`);
-                metadata = await response.json();
-                initializeApp();
+                const response = await fetch('/api/get_kit_structure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kit: CURRENT_KIT_FOLDER })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    kitStructure = result.parts;
+                    initializeApp();
+                } else {
+                    console.error('Error loading kit structure:', result.message);
+                }
             } catch (error) {
-                console.error('Error loading metadata:', error);
+                console.error('Error loading kit structure:', error);
             }
         }
 
         // Initialize app
         function initializeApp() {
-            const parts = metadata.data.parts;
-            const layerHeights = metadata.data.layerHeights || [];
-            const lhMap = {};
-            layerHeights.forEach((lh, i) => lhMap[lh.id] = i);
+            if (!kitStructure || kitStructure.length === 0) {
+                console.error('No kit structure loaded');
+                return;
+            }
 
             const navContainer = document.getElementById('nav-icons');
+            const countLayer = document.getElementById('count-layer');
             navContainer.innerHTML = '';
-
-            parts.forEach((part, index) => {
-                const zIndex = part.zIndex || 0;
-                const lhId = part.layerHeight || 'default';
-                const x = lhMap[lhId] !== undefined ? lhMap[lhId] : zIndex;
-                const y = index + 1;
-                const folderName = `${x}-${y}`;
-
+            countLayer.innerHTML = '';
+            kitStructure.forEach((part, index) => {
+              
+                
                 const navIcon = document.createElement('div');
                 navIcon.className = 'nav-icon';
                 navIcon.dataset.partIndex = index;
-                navIcon.dataset.folderName = folderName;
+                navIcon.dataset.folderName = part.folder;
 
                 const img = document.createElement('img');
-                img.src = `${KIT_PATH}${folderName}/nav.png`;
-                img.alt = part.name;
+                img.src = `${KIT_PATH}${part.folder}/nav.png`;
+                img.alt = part.folder;
                 img.onerror = () => img.style.display = 'none';
 
                 const label = document.createElement('div');
                 label.className = 'label';
-                label.textContent = `${x}-${y}`;
+                label.textContent = part.folder;
 
                 navIcon.appendChild(img);
                 navIcon.appendChild(label);
-                navIcon.onclick = () => selectPart(index, folderName, part);
+                navIcon.onclick = () => selectPart(index, part);
 
                 navContainer.appendChild(navIcon);
+                countLayer.textContent = `(${kitStructure.length})`;
+                // Auto-select first item for this part by default
+                if (part.items_count > 0) {
+                    const firstColor = part.colors.length > 0 ? part.colors[0] : 'default';
+                    internalSelectItem(index, 1, part, firstColor, 0);
+                }
             });
+
+            // Select first part in UI
+            if (kitStructure.length > 0) {
+                selectPart(0, kitStructure[0]);
+            }
+        }
+
+        // Internal select item for auto-init
+        async function internalSelectItem(partIndex, itemNumber, part, colorCode, colorIndex) {
+            const sortOrder = part.x * 1000 + partIndex;
+
+            characterLayers[partIndex] = {
+                folderName: part.folder,
+                color: colorCode,
+                colorIndex: colorIndex,
+                itemNumber: itemNumber,
+                sortOrder: sortOrder
+            };
+            renderCharacter();
         }
 
         // Select part
-        function selectPart(index, folderName, part) {
-            currentPart = { index, folderName, part };
+        function selectPart(index, part) {
+            currentPart = { index, part };
 
             // Update active nav icon
             document.querySelectorAll('.nav-icon').forEach(icon => {
@@ -478,115 +534,124 @@
             document.querySelector(`[data-part-index="${index}"]`).classList.add('active');
 
             // Update part name
-            document.getElementById('current-part-name').textContent = part.name;
+            document.getElementById('current-part-name').textContent = part.folder;
+            document.getElementById('delete-part-btn').style.display = 'block';
 
-            // Reset item to 0 for new part
-            currentItem = 0;
+            // Reset item to 1 for new part
+            currentItem = 1;
 
             // Load items
-            loadItems(folderName, part);
+            loadItems(part);
 
             // Load colors
-            loadColors(folderName, part);
+            loadColors(part);
         }
 
         // Load items for current part
-        async function loadItems(folderName, part) {
+        async function loadItems(part) {
             const itemGrid = document.getElementById('item-grid');
             itemGrid.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải...</div>';
 
-            const items = part.items;
             itemGrid.innerHTML = '';
 
-            items.forEach((itemLayers, itemIndex) => {
+            // Add "None" option
+            const noneDiv = document.createElement('div');
+            noneDiv.className = 'item-option item-none';
+            if (characterLayers[currentPart.index] === undefined) {
+                noneDiv.classList.add('active');
+            }
+            noneDiv.onclick = () => selectItem(-1);
+            itemGrid.appendChild(noneDiv);
+
+            // Generate items from 1 to items_count
+            for (let itemNum = 1; itemNum <= part.items_count; itemNum++) {
                 const itemDiv = document.createElement('div');
                 itemDiv.className = 'item-option';
-                itemDiv.dataset.itemIndex = itemIndex;
+                itemDiv.dataset.itemNumber = itemNum;
+
+                if (characterLayers[currentPart.index] && characterLayers[currentPart.index].itemNumber === itemNum) {
+                    itemDiv.classList.add('active');
+                }
 
                 const img = document.createElement('img');
-                // Use thumbnail file: thumb_1.png, thumb_2.png, etc.
-                const imagePath = `${KIT_PATH}${folderName}/thumb_${itemIndex + 1}.png`;
+                const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png`;
                 img.src = imagePath;
                 img.onerror = () => {
-                    // Fallback: try to use first image from first color folder
                     console.log(`Thumbnail not found: ${imagePath}`);
                     itemDiv.style.display = 'none';
                 };
 
                 itemDiv.appendChild(img);
-                itemDiv.onclick = () => selectItem(itemIndex, folderName);
+                itemDiv.onclick = () => selectItem(itemNum);
 
                 itemGrid.appendChild(itemDiv);
-            });
+            }
         }
 
-        // Get color folders
-        async function getColorFolders(folderName) {
-            // This is a workaround - in real implementation, you'd need a directory listing
-            // For now, we'll use the toning data from metadata
-            const part = currentPart.part;
-            const toningId = part.toning;
-
-            if (!toningId) return ['default'];
-
-            const toning = metadata.data.tonings.find(t => t.id === toningId);
-            if (!toning || !toning.filters) return ['default'];
-
-            return toning.filters.map((filter, index) => {
-                const gradients = filter.gradients || [];
-                const lastColor = gradients[gradients.length - 1]?.color || '#000000';
-                return lastColor.replace('#', '').toUpperCase();
-            });
+        // Helper to extract hex color from folder name
+        function getColorHex(colorFolderName) {
+            if (colorFolderName === 'default') return 'CCCCCC';
+            // Extract hex from folder name (e.g., "FF5733" or "FF5733_2")
+            const match = colorFolderName.match(/^([0-9A-Fa-f]{6})/);
+            return match ? match[1] : 'CCCCCC';
         }
 
         // Load colors
-        async function loadColors(folderName, part) {
+        async function loadColors(part) {
             const colorGrid = document.getElementById('color-grid');
             colorGrid.innerHTML = '';
 
-            const colors = await getColorFolders(folderName);
+            const colors = part.colors.length > 0 ? part.colors : ['default'];
 
-            colors.forEach((colorCode, index) => {
+            colors.forEach((colorFolder, index) => {
                 const colorDiv = document.createElement('div');
                 colorDiv.className = 'color-option';
                 colorDiv.dataset.colorIndex = index;
+                colorDiv.dataset.colorFolder = colorFolder;
 
-                if (colorCode === 'default') {
-                    colorDiv.style.background = '#ccc';
+                const hexColor = getColorHex(colorFolder);
+                colorDiv.style.background = `#${hexColor}`;
+                colorDiv.title = colorFolder === 'default' ? 'Màu mặc định' : `#${hexColor}`;
+
+                if (colorFolder === 'default') {
                     colorDiv.classList.add('default-color');
-                    colorDiv.title = 'Màu mặc định';
-                } else {
-                    colorDiv.style.background = `#${colorCode}`;
-                    colorDiv.title = `#${colorCode}`;
                 }
 
-                colorDiv.dataset.colorCode = colorCode;
-                colorDiv.onclick = () => selectColor(colorCode);
+                colorDiv.onclick = () => selectColor(colorFolder, index);
 
                 colorGrid.appendChild(colorDiv);
             });
 
             // Select first color by default
             if (colors.length > 0) {
-                selectColor(colors[0]);
+                selectColor(colors[0], 0);
             }
         }
 
         // Select item
-        function selectItem(itemIndex, folderName) {
-            currentItem = itemIndex;
+        function selectItem(itemNumber) {
+            currentItem = itemNumber;
 
             document.querySelectorAll('.item-option').forEach(item => {
                 item.classList.remove('active');
             });
-            document.querySelector(`[data-item-index="${itemIndex}"]`)?.classList.add('active');
+            
+            if (itemNumber === -1) {
+                // "None" selected
+                document.querySelector('.item-none')?.classList.add('active');
+                delete characterLayers[currentPart.index];
+                renderCharacter();
+                return;
+            }
+
+            document.querySelector(`[data-item-number="${itemNumber}"]`)?.classList.add('active');
 
             // Auto-select first color if not already selected
             if (!currentColor) {
                 const firstColorOption = document.querySelector('.color-option');
                 if (firstColorOption) {
-                    const firstColorCode = firstColorOption.dataset.colorCode;
-                    selectColor(firstColorCode);
+                    const firstColorFolder = firstColorOption.dataset.colorFolder;
+                    selectColor(firstColorFolder, 0);
                 }
             } else {
                 // Update with current color
@@ -595,15 +660,15 @@
         }
 
         // Select color
-        function selectColor(colorCode) {
-            currentColor = colorCode;
-
-            const option = document.querySelector(`[data-color-code="${colorCode}"]`);
-            currentColorIndex = option ? parseInt(option.dataset.colorIndex) : 0;
+        function selectColor(colorFolder, colorIndex) {
+            currentColor = colorFolder;
+            currentColorIndex = colorIndex !== undefined ? colorIndex : 0;
 
             document.querySelectorAll('.color-option').forEach(color => {
                 color.classList.remove('active');
             });
+            
+            const option = document.querySelector(`[data-color-folder="${colorFolder}"]`);
             if (option) option.classList.add('active');
 
             updateCharacter();
@@ -613,48 +678,14 @@
         async function updateCharacter() {
             if (!currentPart || currentItem === null || !currentColor) return;
 
-            const folderName = currentPart.folderName;
-            const zIndex = currentPart.part.zIndex || currentPart.index;
+            const part = currentPart.part;
+            const sortOrder = part.x * 1000 + currentPart.index;
 
-            // Load all layers for this item
-            const itemLayers = currentPart.part.items[currentItem];
-            if (!itemLayers) {
-                console.warn(`Item ${currentItem} not found in part ${currentPart.part.name}`);
-                return;
-            }
-            const layerCount = Array.isArray(itemLayers) ? itemLayers.length : 1;
-
-            // Calculate offset: sum of layers of all previous items in this part
-            let offset = 0;
-            for (let i = 0; i < currentItem; i++) {
-                const prevItemLayers = currentPart.part.items[i];
-                offset += Array.isArray(prevItemLayers) ? prevItemLayers.length : 1;
-            }
-
-            // Get base height from layerHeights metadata
-            const layerHeights = metadata.data.layerHeights || [];
-            const layerHeightId = currentPart.part.layerHeight || 'default';
-            const heightIndex = layerHeights.findIndex(lh => lh.id === layerHeightId);
-
-            // sortOrder = (Base Layer Height Index * 1000) + (zIndex offset) + (insertion order/index)
-            // This ensures parts in lower 'heights' are drawn first.
-            const sortOrder = (heightIndex !== -1 ? heightIndex : 999) * 10000 +
-                (zIndex * 100) +
-                currentPart.index;
-
-            // Check if part is flattened (1 item + multiple colors)
-            const numItems = currentPart.part.items.length;
-            const numColors = (await getColorFolders(folderName)).length;
-            const isFlattened = (numItems === 1 && numColors > 1);
-
-            // Key by part index to avoid overwriting parts with same zIndex
             characterLayers[currentPart.index] = {
-                folderName,
+                folderName: part.folder,
                 color: currentColor,
                 colorIndex: currentColorIndex,
-                isFlattened: isFlattened,
-                layerCount,
-                offset: offset,
+                itemNumber: currentItem,
                 sortOrder: sortOrder
             };
 
@@ -665,35 +696,27 @@
         async function renderCharacter() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Sort by sortOrder (zIndex)
+            // Sort by sortOrder (X value determines layer order)
             const sortedLayers = Object.values(characterLayers).sort((a, b) => a.sortOrder - b.sortOrder);
 
             for (const layer of sortedLayers) {
-                const { folderName, color, colorIndex, isFlattened, layerCount, offset } = layer;
+                const { folderName, color, itemNumber } = layer;
 
-                // Load and draw each layer
-                for (let i = 1; i <= layerCount; i++) {
-                    let layerNumber;
-                    let colorPath;
+                // Determine image path
+                let imagePath;
+                if (color === 'default' || !color) {
+                    // No color folder, image in root
+                    imagePath = `${KIT_PATH}${folderName}/${itemNumber}.png`;
+                } else {
+                    // Image in color subfolder
+                    imagePath = `${KIT_PATH}${folderName}/${color}/${itemNumber}.png`;
+                }
 
-                    if (isFlattened) {
-                        // In flattened mode, images for all colors are in the root
-                        // Index = (selectedColorIndex * layersPerItem) + localLayerOffset
-                        layerNumber = (colorIndex * layerCount) + i;
-                        colorPath = '';
-                    } else {
-                        layerNumber = offset + i;
-                        colorPath = (color === 'default' || !color) ? '' : `${color}/`;
-                    }
-
-                    const imagePath = `${KIT_PATH}${folderName}/${colorPath}${layerNumber}.png`;
-
-                    try {
-                        const img = await loadImage(imagePath);
-                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    } catch (error) {
-                        console.error(`Failed to load: ${imagePath}`);
-                    }
+                try {
+                    const img = await loadImage(imagePath);
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                } catch (error) {
+                    console.error(`Failed to load: ${imagePath}`);
                 }
             }
         }
@@ -731,6 +754,118 @@
             document.getElementById('item-grid').innerHTML = '';
             document.getElementById('color-grid').innerHTML = '';
             document.getElementById('current-part-name').textContent = 'Chọn một bộ phận';
+        }
+
+        // Randomize character
+        async function randomizeCharacter() {
+            if (!kitStructure || kitStructure.length === 0) return;
+
+            // Randomize each part
+            for (let partIndex = 0; partIndex < kitStructure.length; partIndex++) {
+                const part = kitStructure[partIndex];
+                if (part.items_count === 0) continue;
+
+                // 85% chance to select an item, 15% chance to skip (None)
+                if (Math.random() < 0.15) {
+                    delete characterLayers[partIndex];
+                    continue;
+                }
+
+                const itemNumber = Math.floor(Math.random() * part.items_count) + 1;
+                const colors = part.colors.length > 0 ? part.colors : ['default'];
+                const colorIdx = Math.floor(Math.random() * colors.length);
+                const selectedColor = colors[colorIdx];
+
+                const sortOrder = part.x * 1000 + partIndex;
+
+                characterLayers[partIndex] = {
+                    folderName: part.folder,
+                    color: selectedColor,
+                    colorIndex: colorIdx,
+                    itemNumber: itemNumber,
+                    sortOrder: sortOrder
+                };
+            }
+
+            renderCharacter();
+
+            // Refresh UI if a part is currently selected
+            if (currentPart) {
+                selectPart(currentPart.index, currentPart.part);
+            }
+        }
+
+        // Prompt zip kit command
+        async function promptZipKit() {
+            if (!confirm(`Bạn có muốn tải xuống toàn bộ folder bộ sưu tập "${CURRENT_KIT_FOLDER}" thành file .zip không?`)) return;
+            
+            try {
+                // Show loading message
+                const loadingMsg = document.createElement('div');
+                loadingMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;';
+                loadingMsg.textContent = 'Đang tạo file ZIP...';
+                document.body.appendChild(loadingMsg);
+
+                const response = await fetch('/api/zip_kit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kit: CURRENT_KIT_FOLDER })
+                });
+
+                // Remove loading message
+                document.body.removeChild(loadingMsg);
+
+                if (response.ok) {
+                    // Get the blob from response
+                    const blob = await response.blob();
+                    
+                    // Create download link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${CURRENT_KIT_FOLDER}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    // Cleanup
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                    
+                    alert('File ZIP đã được tải xuống!');
+                } else {
+                    const result = await response.json();
+                    alert("Lỗi: " + (result.message || 'Không thể tạo file ZIP'));
+                }
+            } catch (error) {
+                alert("Không thể kết nối đến Server. Bạn có đang chạy app_server.py không?");
+                console.error(error);
+            }
+        }
+
+        // Prompt delete part command
+        async function promptDeletePart() {
+            if (!currentPart) return;
+            const yIndex = currentPart.index + 1;
+            
+            if (!confirm(`Bạn có muốn XÓA VĨNH VIỄN bộ phận "${currentPart.part.name}" (Folder index ${currentPart.folderName})?\n\nLưu ý: Hành động này sẽ tự động đổi tên các folder phía sau để lấp khoảng trống.`)) return;
+            
+            try {
+                const response = await fetch('/api/delete_part', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ kit: CURRENT_KIT_FOLDER, y: yIndex })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert("Đã xóa xong! Trang web sẽ tự động tải lại.");
+                    location.reload();
+                } else {
+                    alert("Lỗi: " + result.message);
+                }
+            } catch (error) {
+                alert("Không thể kết nối đến Server. Bạn có đang chạy app_server.py không?");
+                console.error(error);
+            }
         }
 
         // Initialize on load

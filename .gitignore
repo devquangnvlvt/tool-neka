@@ -2,4 +2,5 @@ downloads/
 __pycache__/
 *.pyc
 kit_data.json
+kits.json
 temp_kit_data.json
