@@ -40,6 +40,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_kits_list(data)
         elif self.path == '/api/list_part_images':
             self.handle_list_part_images(data)
+        elif self.path == '/api/rename_folder':
+            self.handle_rename_folder(data)
+        elif self.path == '/api/get_item_layers':
+            self.handle_get_item_layers(data)
         else:
             self.send_error(404, "Unknown API endpoint")
 
@@ -69,6 +73,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
+
     def handle_get_kit_structure(self, data):
         kit_folder = data.get('kit')
         if not kit_folder:
@@ -92,10 +97,19 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             for entry in os.listdir(structured_dir):
                 entry_path = os.path.join(structured_dir, entry)
                 if not os.path.isdir(entry_path): continue
+                
+                # No alias resolution needed
+                # real_name, is_aliased = self.resolve_real_folder_name(kit_path, entry)
+                
                 match = re.match(r"^(\d+)-(\d+)$", entry)
-                if not match: continue
-                x = int(match.group(1))
-                y = int(match.group(2))
+                
+                # If not X-Y even after alias resolution, put it at end
+                if not match:
+                    x, y = 9999, 9999
+                else:
+                    x = int(match.group(1))
+                    y = int(match.group(2))
+                    
                 item_indices = []
                 thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
                 for f in os.listdir(entry_path):
@@ -106,21 +120,271 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 for sub in os.listdir(entry_path):
                     if os.path.isdir(os.path.join(entry_path, sub)):
                         colors.append(sub)
+                
+                # Count layers per item from metadata
+                item_layer_counts = {}
+                try:
+                    match_y = re.match(r"^\d+-(\d+)$", entry)
+                    if match_y:
+                        part_idx = int(match_y.group(1)) - 1
+                        meta_path = os.path.join(kit_path, "metadata.json")
+                        if os.path.exists(meta_path):
+                            with open(meta_path, 'r', encoding='utf-8') as f:
+                                meta = json.load(f)
+                                parts_data = meta.get('data', {}).get('parts', [])
+                                if 0 <= part_idx < len(parts_data):
+                                    items = parts_data[part_idx].get('items', [])
+                                    for item_idx, item_layers in enumerate(items):
+                                        if not isinstance(item_layers, list): item_layers = [item_layers]
+                                        layer_count = 0
+                                        for layer in item_layers:
+                                            if isinstance(layer, dict):
+                                                if layer.get('blob'): layer_count += 1
+                                                addon_textures = layer.get('addonTextures', [])
+                                                layer_count += len(addon_textures)
+                                        item_layer_counts[item_idx + 1] = layer_count
+                except Exception as e:
+                    print(f"Error reading layer counts for {entry}: {e}")
+                
                 parts.append({
                     "x": x, "y": y, "folder": entry,
                     "items_count": num_items, "colors": colors,
-                    "is_separated": entry in separated_folders
+                    "is_separated": entry in separated_folders,
+                    "item_layer_counts": item_layer_counts
                 })
+
+            # Check for duplicate X values
+            x_counts = {}
+            for p in parts:
+                x = p['x']
+                if x != 9999: # Ignore invalid/non-standard folders
+                    if x not in x_counts: x_counts[x] = []
+                    x_counts[x].append(p['folder'])
+            
+            duplicate_warnings = []
+            for x, folders in x_counts.items():
+                if len(folders) > 1:
+                    duplicate_warnings.append(f"X={x}: {', '.join(folders)}")
+
             parts.sort(key=lambda p: p['y'])
+            
+            # --- Check X-Y Continuity ---
+            found_x = set()
+            found_y = set()
+            for p in parts:
+                if p['x'] != 9999: found_x.add(p['x'])
+                if p['y'] != 9999: found_y.add(p['y'])
+            
+            missing_x = []
+            if found_x:
+                max_x = max(found_x)
+                for i in range(1, max_x + 1):
+                    if i not in found_x:
+                        missing_x.append(i)
+            
+            missing_y = []
+            if found_y:
+                max_y = max(found_y)
+                for i in range(1, max_y + 1):
+                    if i not in found_y:
+                        missing_y.append(i)
+            # ---------------------------
+
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
             response = json.dumps({
                 "success": True, "parts": parts,
                 "has_separated_layers": len(separated_folders) > 0,
-                "separated_folders": separated_folders
+                "separated_folders": separated_folders,
+                "duplicates": duplicate_warnings,
+                "missing_x": missing_x,
+                "missing_y": missing_y
             })
             self.wfile.write(response.encode('utf-8'))
+        except Exception as e:
+            self.send_api_response(False, f"Server Error: {str(e)}")
+
+
+    def handle_rename_folder(self, data):
+        kit_folder = data.get('kit')
+        old_name = data.get('old_name')
+        new_name = data.get('new_name')
+
+        if not kit_folder or not old_name or not new_name:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        # Enforce X-Y format
+        if not re.match(r"^\d+-\d+$", new_name):
+            self.send_api_response(False, "Tên mới phải đúng định dạng số X-Y (VD: 100-51) để sắp xếp layer.")
+            return
+
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            
+            struct_base = os.path.join(kit_path, "items_structured")
+            merged_base = os.path.join(kit_path, "items_merged")
+            
+            old_path = os.path.join(struct_base, old_name)
+            new_path = os.path.join(struct_base, new_name)
+
+            if not os.path.exists(old_path):
+                self.send_api_response(False, "Folder not found")
+                return
+            if os.path.exists(new_path):
+                self.send_api_response(False, "New folder name already exists")
+                return
+
+            # Check for duplicate X (Layer Order conflict)
+            # Extract new X
+            match = re.match(r"^(\d+)-", new_name)
+            if match:
+                new_x = int(match.group(1))
+                # Scan directory for any other folder starting with "{new_x}-"
+                for entry in os.listdir(struct_base):
+                    if entry == old_name: continue # Ignore self
+                    if not os.path.isdir(os.path.join(struct_base, entry)): continue
+                    
+                    # Check X component
+                    m = re.match(r"^(\d+)-", entry)
+                    if m:
+                        existing_x = int(m.group(1))
+                        if existing_x == new_x:
+                            self.send_api_response(False, f"Lỗi: Đã tồn tại thư mục '{entry}' có cùng thứ tự X={new_x}. Vui lòng chọn X khác.")
+                            return
+
+            # Rename physical directory
+            shutil.move(old_path, new_path)
+            
+            # Rename in merged folder if exists
+            old_merged = os.path.join(merged_base, old_name)
+            new_merged = os.path.join(merged_base, new_name)
+            if os.path.exists(old_merged):
+                try: shutil.move(old_merged, new_merged)
+                except: pass
+
+            # Update separated_layers.json
+            sep_path = os.path.join(kit_path, "separated_layers.json")
+            if os.path.exists(sep_path):
+                with open(sep_path, 'r', encoding='utf-8') as f:
+                    sep_list = json.load(f)
+                if old_name in sep_list:
+                    sep_list[sep_list.index(old_name)] = new_name
+                    with open(sep_path, 'w', encoding='utf-8') as f:
+                        json.dump(sep_list, f, ensure_ascii=False, indent=4)
+
+            # We NO LONGER need folder_aliases.json because the user wants X-Y format ONLY.
+            # The physical rename handles the sorting automatically since get_kit_structure reads X from the folder name.
+            
+            # Clean up old alias if exists
+            alias_path = os.path.join(kit_path, "folder_aliases.json")
+            if os.path.exists(alias_path):
+                try:
+                    with open(alias_path, 'r', encoding='utf-8') as f:
+                        aliases = json.load(f)
+                    if old_name in aliases:
+                        del aliases[old_name]
+                        with open(alias_path, 'w', encoding='utf-8') as f:
+                            json.dump(aliases, f, ensure_ascii=False, indent=4)
+                except: pass
+
+            self.send_api_response(True, "Renamed successfully")
+
+        except Exception as e:
+            self.send_api_response(False, f"Error: {str(e)}")
+
+    def handle_get_item_layers(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        item_number = data.get('item_number')
+
+        if not kit_folder or not folder_name or item_number is None:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            
+            # Get part index from folder name
+            match = re.search(r"-(\d+)$", folder_name)
+            if not match:
+                self.send_api_response(False, "Invalid folder name format")
+                return
+            
+            part_idx = int(match.group(1)) - 1
+            meta_path = os.path.join(kit_path, "metadata.json")
+            
+            if not os.path.exists(meta_path):
+                self.send_api_response(False, "Metadata not found")
+                return
+            
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+                parts_data = meta.get('data', {}).get('parts', [])
+                
+                if part_idx < 0 or part_idx >= len(parts_data):
+                    self.send_api_response(False, "Part index out of range")
+                    return
+                
+                items = parts_data[part_idx].get('items', [])
+                item_idx = item_number - 1
+                
+                if item_idx < 0 or item_idx >= len(items):
+                    self.send_api_response(False, "Item index out of range")
+                    return
+                
+                item_layers = items[item_idx]
+                if not isinstance(item_layers, list):
+                    item_layers = [item_layers]
+                
+                # Extract layer details
+                layers_info = []
+                for layer_idx, layer in enumerate(item_layers):
+                    if not isinstance(layer, dict):
+                        continue
+                    
+                    # Main blob
+                    if layer.get('blob'):
+                        crop = layer.get('crop', {})
+                        layers_info.append({
+                            'type': 'main',
+                            'index': layer_idx,
+                            'blob': layer.get('blob'),
+                            'x': crop.get('x', 0),
+                            'y': crop.get('y', 0),
+                            'w': crop.get('w', 0),
+                            'h': crop.get('h', 0)
+                        })
+                    
+                    # Addon textures
+                    addon_textures = layer.get('addonTextures', [])
+                    for addon_idx, addon in enumerate(addon_textures):
+                        if isinstance(addon, dict) and addon.get('blob'):
+                            addon_crop = addon.get('crop', {})
+                            layers_info.append({
+                                'type': 'addon',
+                                'index': f"{layer_idx}-{addon_idx}",
+                                'blob': addon.get('blob'),
+                                'layer_id': addon.get('layer', ''),
+                                'x': addon_crop.get('x', 0),
+                                'y': addon_crop.get('y', 0),
+                                'w': addon_crop.get('w', 0),
+                                'h': addon_crop.get('h', 0)
+                            })
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                response = json.dumps({
+                    "success": True,
+                    "layers": layers_info,
+                    "total_count": len(layers_info)
+                })
+                self.wfile.write(response.encode('utf-8'))
+                
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
@@ -136,6 +400,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(success, message)
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
+
 
     def handle_merge_layers(self, data):
         kit_folder = data.get('kit')
@@ -163,6 +428,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             # Load metadata for offsets
             offsets = {} 
             try:
+                # Resolve alias first to find the metadata index key
                 match = re.search(r"-(\d+)$", folder_name)
                 if match:
                     part_idx = int(match.group(1)) - 1
@@ -332,7 +598,11 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             # Load metadata to find offsets
             offsets = {} # filename -> {x, y}
             try:
-                # 1. Identify part index from folder name (X-Y -> Y is part_index + 1)
+                # 1. Identify part index from folder name
+                # Resolve alias first
+                # 1. Identify part index from folder name
+                # No alias resolution
+                
                 match = re.search(r"-(\d+)$", folder_name)
                 if match:
                     part_idx = int(match.group(1)) - 1

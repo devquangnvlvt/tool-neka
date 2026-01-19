@@ -265,6 +265,21 @@
             content: "✕";
         }
 
+        .layer-count-badge {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: #7c3aed;
+            color: white;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            pointer-events: none;
+            z-index: 10;
+        }
+
         .color-selector {
             background: #f8f9fa;
             border-radius: 12px;
@@ -454,7 +469,39 @@
             display: flex;
             gap: 5px;
         }
-    </style>
+
+        /* Global Loading Overlay */
+        #global-loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            backdrop-filter: blur(4px);
+        }
+
+        #global-loading-overlay .spinner {
+            border-color: rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            width: 60px;
+            height: 60px;
+            border-width: 6px;
+        }
+
+        #global-loading-overlay p {
+            margin-top: 20px;
+            font-size: 18px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        </style>
 </head>
 
 <body>
@@ -470,9 +517,7 @@
                 <div class="controls">
                     <button class="btn btn-secondary" onclick="randomizeCharacter()">🎲 Random</button>
                 </div>
-                <div id="debug-info">
-                  
-                </div>
+                <div id="structure-warnings" style="display: none; padding: 10px; background: #fff3e0; border: 1px solid #ffe0b2; color: #e65100; border-radius: 5px; margin-bottom: 10px; font-size: 13px;"></div>
                 <div id="separated-layers-info" style="display: none; padding: 15px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px; margin-top: 10px; width: 100%; text-align: left;">
                     <h4 style="color: #1976d2; margin-bottom: 8px; font-size: 14px;">🌟 Các bộ phận có layer tách:</h4>
                     <div id="separated-folders-list" style="font-size: 12px; color: #444; line-height: 1.6;"></div>
@@ -499,6 +544,7 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3 id="current-part-name">Chọn một bộ phận</h3>
                         <div style="display: flex; gap: 5px;">
+                            <button id="layer-details-btn" class="btn" style="background: #7c3aed; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="showCurrentItemLayers()">📋 Chi tiết layer</button>
                             <button id="merge-part-btn" class="btn" style="background: #00b894; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="mergeLayers()">🪄 Ghép layer</button>
                             <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa</button>
                         </div>
@@ -602,6 +648,42 @@
                 const result = await response.json();
                 if (result.success) {
                     kitStructure = result.parts;
+
+                    // Warning about duplicate X and gaps
+                    const warningBox = document.getElementById('structure-warnings');
+                    let warningHtml = '';
+                    
+                    if (result.duplicates && result.duplicates.length > 0) {
+                        warningHtml += `
+                            <strong>⚠️ CẢNH BÁO TRÙNG THỨ TỰ (X):</strong><br>
+                            Các folder sau đây đang dùng chung số X (sẽ bị lỗi hiển thị đè nhau):<br>
+                            ${result.duplicates.join('<br>')}<br><br>
+                        `;
+                    }
+                    
+                    if (result.missing_x && result.missing_x.length > 0) {
+                        warningHtml += `
+                            <strong>⚠️ THIẾU CHỈ SỐ X (Thứ tự layer):</strong><br>
+                            Thiếu các số X sau: ${result.missing_x.join(', ')}<br>
+                            (Hãy kiểm tra lại việc đặt tên folder X-Y)<br><br>
+                        `;
+                    }
+                    
+                    if (result.missing_y && result.missing_y.length > 0) {
+                        warningHtml += `
+                            <strong>⚠️ THIẾU CHỈ SỐ Y (Vị trí menu):</strong><br>
+                            Thiếu các số Y sau: ${result.missing_y.join(', ')}<br>
+                            (Hãy kiểm tra lại việc đặt tên folder X-Y)
+                        `;
+                    }
+                    
+                    if (warningHtml) {
+                        warningBox.style.display = 'block';
+                        warningBox.innerHTML = warningHtml;
+                    } else {
+                        warningBox.style.display = 'none';
+                        warningBox.innerHTML = '';
+                    }
                     
                     // Handle separated layers info
                     const sepInfo = document.getElementById('separated-layers-info');
@@ -614,7 +696,29 @@
                     }
 
                     imgVers = Date.now(); // Update version to bypass cache
-                    initializeApp(preserveSelection);
+                    if (preserveSelection) {
+                // If preserving selection, update the existing characterLayers with new metadata
+                // This handles renaming (folderName updates) and sorting (sortOrder updates)
+                Object.keys(characterLayers).forEach(idx => {
+                    const partIndex = parseInt(idx);
+                    if (kitStructure[partIndex]) {
+                        const newPart = kitStructure[partIndex];
+                        const layer = characterLayers[partIndex];
+                        
+                        // Update folder name
+                        layer.folderName = newPart.folder;
+                        
+                        // Update sortOrder based on new X
+                        // sortOrder = X * 1000 + partIndex
+                        layer.sortOrder = newPart.x * 1000 + partIndex;
+                    } else {
+                        // Part might have been deleted?
+                        delete characterLayers[partIndex];
+                    }
+                });
+            }
+
+            initializeApp(preserveSelection);
                 } else {
                     console.error('Error loading kit structure:', result.message);
                 }
@@ -710,7 +814,14 @@
             document.querySelector(`[data-part-index="${index}"]`).classList.add('active');
 
             // Update part name
-            document.getElementById('current-part-name').textContent = part.folder;
+            // Update part name with Rename button
+            const nameContainer = document.getElementById('current-part-name');
+            nameContainer.innerHTML = `
+                ${part.folder}
+                <button class="btn" style="padding:2px 6px; font-size:12px; margin-left:8px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này">✎</button>
+            `;
+
+           
             document.getElementById('delete-part-btn').style.display = 'block';
             
             // Show merge button only for separated layers
@@ -766,6 +877,21 @@
                 };
 
                 itemDiv.appendChild(img);
+                
+                // Add layer count badge if > 1
+                if (part.item_layer_counts && part.item_layer_counts[itemNum]) {
+                    const layerCount = part.item_layer_counts[itemNum];
+                    if (layerCount > 1) {
+                        const badge = document.createElement('div');
+                        badge.className = 'layer-count-badge';
+                        badge.textContent = layerCount;
+                        badge.title = `Click để xem ${layerCount} layers`;
+                        badge.style.cursor = 'pointer';
+                        badge.onclick = (e) => showLayerDetails(part.folder, itemNum, e);
+                        itemDiv.appendChild(badge);
+                    }
+                }
+                
                 itemDiv.onclick = () => selectItem(itemNum);
 
                 itemGrid.appendChild(itemDiv);
@@ -841,6 +967,14 @@
                 // Update with current color
                 updateCharacter();
             }
+            
+            // Show layer details button if this item has multiple layers
+            const layerDetailsBtn = document.getElementById('layer-details-btn');
+            if (currentPart && currentPart.part.item_layer_counts && currentPart.part.item_layer_counts[itemNumber] > 1) {
+                layerDetailsBtn.style.display = 'block';
+            } else {
+                layerDetailsBtn.style.display = 'none';
+            }
         }
 
         // Select color
@@ -877,32 +1011,40 @@
         }
 
         // Render character
+        // Render character
         async function renderCharacter() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
             // Sort by sortOrder (X value determines layer order)
             const sortedLayers = Object.values(characterLayers).sort((a, b) => a.sortOrder - b.sortOrder);
 
-            for (const layer of sortedLayers) {
+            // Pre-load all images in parallel
+            const loadPromises = sortedLayers.map(async layer => {
                 const { folderName, color, itemNumber } = layer;
-
-                // Determine image path
                 let imagePath;
                 if (color === 'default' || !color) {
-                    // No color folder, image in root
                     imagePath = `${KIT_PATH}${folderName}/${itemNumber}.png?v=${imgVers}`;
                 } else {
-                    // Image in color subfolder
                     imagePath = `${KIT_PATH}${folderName}/${color}/${itemNumber}.png?v=${imgVers}`;
                 }
 
                 try {
                     const img = await loadImage(imagePath);
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    return img;
                 } catch (error) {
                     console.error(`Failed to load: ${imagePath}`);
+                    return null;
                 }
-            }
+            });
+
+            // Wait for all to load
+            const images = await Promise.all(loadPromises);
+
+            // Clear and draw all at once
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            images.forEach(img => {
+                if (img) {
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                }
+            });
         }
 
         // Load image helper
@@ -1009,12 +1151,97 @@
             }
         }
 
+        // Layer details modal functions
+        async function showLayerDetails(folderName, itemNumber, event) {
+            event.stopPropagation(); // Prevent item selection
+            
+            const modal = document.getElementById('layer-details-modal');
+            const content = document.getElementById('layer-details-content');
+            
+            modal.style.display = 'flex';
+            content.innerHTML = '<div class="loading"><div class="spinner"></div>Đang tải...</div>';
+            
+            try {
+                const response = await fetch('/api/get_item_layers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: folderName,
+                        item_number: itemNumber
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    let html = `
+                        <h3 style="margin-bottom: 15px;">Item #${itemNumber} - Tổng ${result.total_count} layer(s)</h3>
+                        <div style="display: grid; gap: 15px;">
+                    `;
+                    
+                    result.layers.forEach((layer, idx) => {
+                        const typeLabel = layer.type === 'main' ? '🎨 Layer chính' : '✨ Layer phụ';
+                        const imgUrl = `https://img2.neka.cc/${layer.blob}`;
+                        
+                        html += `
+                            <div style="border: 1px solid #ddd; border-radius: 8px; padding: 15px; background: #f9f9f9;">
+                                <div style="display: flex; gap: 15px; align-items: start;">
+                                    <img src="${imgUrl}" style="width: 100px; height: 100px; object-fit: contain; border: 1px solid #ccc; background: white; border-radius: 4px;">
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: bold; margin-bottom: 8px;">${typeLabel} #${idx + 1}</div>
+                                        <div style="font-size: 12px; color: #666; line-height: 1.6;">
+                                            <div><strong>Blob ID:</strong> <code style="background: #e0e0e0; padding: 2px 4px; border-radius: 3px;">${layer.blob}</code></div>
+                                            <div><strong>Vị trí:</strong> x=${layer.x}, y=${layer.y}</div>
+                                            <div><strong>Kích thước:</strong> ${layer.w}×${layer.h}px</div>
+                                            ${layer.layer_id ? `<div><strong>Toning ID:</strong> <code style="background: #e0e0e0; padding: 2px 4px; border-radius: 3px;">${layer.layer_id}</code></div>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    
+                    html += '</div>';
+                    content.innerHTML = html;
+                } else {
+                    content.innerHTML = `<div style="color: red;">Lỗi: ${result.message}</div>`;
+                }
+            } catch (error) {
+                content.innerHTML = `<div style="color: red;">Lỗi kết nối: ${error.message}</div>`;
+            }
+        }
+        
+        function closeLayerDetailsModal() {
+            document.getElementById('layer-details-modal').style.display = 'none';
+        }
+        
+        function showCurrentItemLayers() {
+            if (!currentPart || !currentItem || currentItem === -1) {
+                alert('Vui lòng chọn một item trước!');
+                return;
+            }
+            showLayerDetails(currentPart.part.folder, currentItem, { stopPropagation: () => {} });
+        }
+
+        // Global Loading Functions
+        function showLoading(message = 'Đang xử lý...') {
+            document.getElementById('global-loading-message').textContent = message;
+            document.getElementById('global-loading-overlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('global-loading-overlay').style.display = 'none';
+        }
+
         // Prompt delete part command
         async function promptDeletePart() {
             if (!currentPart) return;
             const yIndex = currentPart.index + 1;
             
             if (!confirm(`Bạn có muốn XÓA VĨNH VIỄN bộ phận "${currentPart.part.name}" (Folder index ${currentPart.folderName})?\n\nLưu ý: Hành động này sẽ tự động đổi tên các folder phía sau để lấp khoảng trống.`)) return;
+            
+            showLoading('Đang xóa bộ phận và cập nhật chỉ số folder...');
             
             try {
                 const response = await fetch('/api/delete_part', {
@@ -1032,6 +1259,8 @@
             } catch (error) {
                 alert("Không thể kết nối đến Server. Bạn có đang chạy app_server.py không?");
                 console.error(error);
+            } finally {
+                hideLoading();
             }
         }
 
@@ -1042,6 +1271,37 @@
         let mergeStack = [];
         let mergeFilesList = [];
         let mergeCanvas, mctx;
+
+        async function renamePartFolder(oldName) {
+            const newName = prompt(`Nhập tên mới cho thư mục "${oldName}":`, oldName);
+            if (!newName || newName === oldName) return;
+
+            showLoading('Đang đổi tên thư mục...');
+
+            try {
+                const response = await fetch('/api/rename_folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        kit: CURRENT_KIT_FOLDER, 
+                        old_name: oldName,
+                        new_name: newName
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('Đổi tên thành công!');
+                    loadKitStructure(true);
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Lỗi kết nối server');
+            } finally {
+                hideLoading();
+            }
+        }
 
         async function mergeLayers() {
             if (!currentPart) return;
@@ -1269,6 +1529,26 @@
                 <button id="confirm-merge-btn" class="btn" style="background: #00b894; color: white;" onclick="confirmMerge()">✅ Lưu</button>
             </div>
         </div>
+    </div>
+
+    <!-- Layer Details Modal -->
+    <div id="layer-details-modal" class="modal-overlay" style="display: none;">
+        <div class="merge-modal" style="max-width: 800px; height: auto; max-height: 80vh;">
+            <div class="merge-header">
+                <h2>📋 Chi tiết các layer</h2>
+                <button class="btn btn-secondary" onclick="closeLayerDetailsModal()">✖</button>
+            </div>
+            <div style="padding: 20px; overflow-y: auto; flex: 1;">
+                <div id="layer-details-content">
+                    <div class="loading"><div class="spinner"></div>Đang tải...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Global Loading Overlay -->
+    <div id="global-loading-overlay">
+        <div class="spinner"></div>
+        <p id="global-loading-message">Đang xử lý...</p>
     </div>
 </body>
 
