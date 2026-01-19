@@ -179,6 +179,18 @@
             box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
         }
 
+        .nav-icon.separated::after {
+            content: "✨";
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            font-size: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            padding: 2px;
+            box-shadow: 0 0 5px rgba(0,0,0,0.1);
+        }
+
         .nav-icon .label {
             position: absolute;
             bottom: 0;
@@ -324,6 +336,124 @@
         .container-full{
             width: 100%;
         }
+
+        /* Merge Modal Styles */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+
+        .merge-modal {
+            background: #fff;
+            width: 90%;
+            height: 90%;
+            max-width: 1200px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+
+        .merge-header {
+            padding: 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .merge-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 350px 1fr 250px;
+            overflow: hidden;
+        }
+
+        .layer-library, .stack-manager {
+            padding: 20px;
+            overflow-y: auto;
+            border-right: 1px solid #eee;
+            background: #fdfdfd;
+        }
+
+        .preview-pane {
+            background: #2d3436;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        .preview-canvas-container {
+            background: white;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5);
+            line-height: 0;
+        }
+
+        .merge-item-thumb {
+            width: 100%;
+            aspect-ratio: 1;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 5px;
+        }
+        .merge-item-thumb:hover { border-color: #667eea; }
+
+        .stack-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            background: white;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: move;
+        }
+
+        .stack-item img {
+            width: 40px;
+            height: 40px;
+            object-fit: contain;
+            border: 1px solid #eee;
+        }
+
+        .merge-footer {
+            padding: 20px;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
+            display: flex;
+            justify-content: flex-end;
+            gap: 15px;
+            align-items: center;
+        }
+
+        #merge-preview-canvas {
+            background: repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 20px 20px;
+            max-width: 100%;
+            max-height: calc(100vh - 300px);
+            object-fit: contain;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 5px;
+        }
     </style>
 </head>
 
@@ -343,13 +473,17 @@
                 <div id="debug-info">
                   
                 </div>
+                <div id="separated-layers-info" style="display: none; padding: 15px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px; margin-top: 10px; width: 100%; text-align: left;">
+                    <h4 style="color: #1976d2; margin-bottom: 8px; font-size: 14px;">🌟 Các bộ phận có layer tách:</h4>
+                    <div id="separated-folders-list" style="font-size: 12px; color: #444; line-height: 1.6;"></div>
+                </div>
             </div>
 
             <div class="sidebar">
                 <div class="kit-selector-area">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                         <h3>Bộ sưu tập</h3>
-                        <button class="btn" style="background: #667eea; color: white; padding: 5px 10px; font-size: 12px;" onclick="promptZipKit()">📦 Data (ZIP)</button>
+                        <button class="btn" style="background: #667eea; color: white; padding: 5px 10px; font-size: 12px;" onclick="downloadZip()">📦 Data (ZIP)</button>
                     </div>
                     <select id="kit-selector" onchange="switchKit(this.value)">
                         <option value="">Đang tải danh sách...</option>
@@ -364,7 +498,10 @@
                 <div class="item-selector">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3 id="current-part-name">Chọn một bộ phận</h3>
-                        <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa bộ phận này</button>
+                        <div style="display: flex; gap: 5px;">
+                            <button id="merge-part-btn" class="btn" style="background: #00b894; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="mergeLayers()">🪄 Ghép layer</button>
+                            <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa</button>
+                        </div>
                     </div>
                     <div class="item-grid" id="item-grid"></div>
                 </div>
@@ -391,6 +528,7 @@
         let currentColor = null;
         let currentColorIndex = 0;
         let characterLayers = {};
+        let imgVers = Date.now();
 
         // Canvas
         const canvas = document.getElementById('character-canvas');
@@ -399,32 +537,40 @@
         // Load Kits list
         async function loadKitsList() {
             try {
-                const response = await fetch('kits.json');
-                kits = await response.json();
-
-                if (kits.length > 0) {
-                    // Auto-select the first kit
-                    const firstKit = kits[0];
-                    CURRENT_KIT_FOLDER = firstKit.folder;
-                    KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
-                }
-
-                const selector = document.getElementById('kit-selector');
-                selector.innerHTML = '';
-
-                kits.forEach(kit => {
-                    const option = document.createElement('option');
-                    option.value = kit.folder;
-                    option.textContent = kit.name;
-                    if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
-                    selector.appendChild(option);
+                const response = await fetch('/api/get_kits_list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
                 });
+                const result = await response.json();
+                
+                if (result.success) {
+                    kits = result.kits;
 
-                loadKitStructure();
+                    if (kits.length > 0) {
+                        // Auto-select the first kit
+                        const firstKit = kits[0];
+                        CURRENT_KIT_FOLDER = firstKit.folder;
+                        KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/items_structured/`;
+                    }
+
+                    const selector = document.getElementById('kit-selector');
+                    selector.innerHTML = '';
+
+                    kits.forEach(kit => {
+                        const option = document.createElement('option');
+                        option.value = kit.folder;
+                        option.textContent = kit.name;
+                        if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
+                        selector.appendChild(option);
+                    });
+
+                    loadKitStructure();
+                } else {
+                    console.error('Error loading kits list:', result.message);
+                }
             } catch (error) {
                 console.error('Error loading kits list:', error);
-                // Fallback to current hardcoded kit if kits.json fails
-                loadKitStructure();
             }
         }
 
@@ -446,7 +592,7 @@
         }
 
         // Load kit structure from folder API
-        async function loadKitStructure() {
+        async function loadKitStructure(preserveSelection = false) {
             try {
                 const response = await fetch('/api/get_kit_structure', {
                     method: 'POST',
@@ -456,7 +602,19 @@
                 const result = await response.json();
                 if (result.success) {
                     kitStructure = result.parts;
-                    initializeApp();
+                    
+                    // Handle separated layers info
+                    const sepInfo = document.getElementById('separated-layers-info');
+                    const sepList = document.getElementById('separated-folders-list');
+                    if (result.has_separated_layers) {
+                        sepInfo.style.display = 'block';
+                        sepList.textContent = result.separated_folders.join(', ');
+                    } else {
+                        sepInfo.style.display = 'none';
+                    }
+
+                    imgVers = Date.now(); // Update version to bypass cache
+                    initializeApp(preserveSelection);
                 } else {
                     console.error('Error loading kit structure:', result.message);
                 }
@@ -466,31 +624,32 @@
         }
 
         // Initialize app
-        function initializeApp() {
+        function initializeApp(preserveSelection = false) {
             if (!kitStructure || kitStructure.length === 0) {
                 console.error('No kit structure loaded');
                 return;
             }
 
+            const savedPartIndex = currentPart ? currentPart.index : 0;
+            const savedColorIdx = currentColorIndex;
+
             const navContainer = document.getElementById('nav-icons');
             const countLayer = document.getElementById('count-layer');
             navContainer.innerHTML = '';
             countLayer.innerHTML = '';
-            const xFolders = {}; // X -> [folder1, folder2, ...]
-
+            
             kitStructure.forEach((part, index) => {
-                if (!xFolders[part.x]) {
-                    xFolders[part.x] = [];
-                }
-                xFolders[part.x].push(part.folder);
-
                 const navIcon = document.createElement('div');
                 navIcon.className = 'nav-icon';
                 navIcon.dataset.partIndex = index;
                 navIcon.dataset.folderName = part.folder;
+                if (part.is_separated) {
+                    navIcon.classList.add('separated');
+                    navIcon.title = "Bộ phận này có layer tách";
+                }
 
                 const img = document.createElement('img');
-                img.src = `${KIT_PATH}${part.folder}/nav.png`;
+                img.src = `${KIT_PATH}${part.folder}/nav.png?v=${imgVers}`;
                 img.alt = part.folder;
                 img.onerror = () => img.style.display = 'none';
 
@@ -504,29 +663,25 @@
 
                 navContainer.appendChild(navIcon);
                 countLayer.textContent = `(${kitStructure.length})`;
-                // Auto-select first item for this part by default
-                if (part.items_count > 0) {
+                
+                // If not preserving or if we lost the selection, reset to default if needed
+                if (!characterLayers[index] && part.items_count > 0) {
                     const firstColor = part.colors.length > 0 ? part.colors[0] : 'default';
                     internalSelectItem(index, 1, part, firstColor, 0);
                 }
             });
 
-            const debugInfo = document.getElementById('debug-info');
-            const duplicates = Object.entries(xFolders).filter(([x, folders]) => folders.length > 1);
-            
-            if (duplicates.length > 0) {
-                let warningMsg = '';
-                duplicates.forEach(([x, folders]) => {
-                    warningMsg += `- X=${x}: Thư mục [${folders.join(', ')}]<br>`;
-                });
-                debugInfo.innerHTML = `<div style="padding: 12px; background: #fff3f3; border: 1px solid #ffcccc; color: #d63031; border-radius: 8px; font-size: 13px; margin-top: 10px; width: 100%; text-align: left; line-height: 1.5;">${warningMsg}</div>`;
-            } else {
-                debugInfo.innerHTML = '';
-            }
+            // Re-render canvas but keep layers
+            renderCharacter();
 
-            // Select first part in UI
-            if (kitStructure.length > 0) {
-                selectPart(0, kitStructure[0]);
+            // Reselect the part to refresh item grid
+            const targetIdx = preserveSelection ? savedPartIndex : 0;
+            if (kitStructure[targetIdx]) {
+                selectPart(targetIdx, kitStructure[targetIdx]);
+                // If we had a specific color, try to keep it
+                if (preserveSelection && kitStructure[targetIdx].colors.length > savedColorIdx) {
+                    selectColor(kitStructure[targetIdx].colors[savedColorIdx], savedColorIdx);
+                }
             }
         }
 
@@ -557,6 +712,14 @@
             // Update part name
             document.getElementById('current-part-name').textContent = part.folder;
             document.getElementById('delete-part-btn').style.display = 'block';
+            
+            // Show merge button only for separated layers
+            const mergeBtn = document.getElementById('merge-part-btn');
+            if (part.is_separated) {
+                mergeBtn.style.display = 'block';
+            } else {
+                mergeBtn.style.display = 'none';
+            }
 
             // Reset item to 1 for new part
             currentItem = 1;
@@ -595,7 +758,7 @@
                 }
 
                 const img = document.createElement('img');
-                const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png`;
+                const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
                 img.src = imagePath;
                 img.onerror = () => {
                     console.log(`Thumbnail not found: ${imagePath}`);
@@ -727,10 +890,10 @@
                 let imagePath;
                 if (color === 'default' || !color) {
                     // No color folder, image in root
-                    imagePath = `${KIT_PATH}${folderName}/${itemNumber}.png`;
+                    imagePath = `${KIT_PATH}${folderName}/${itemNumber}.png?v=${imgVers}`;
                 } else {
                     // Image in color subfolder
-                    imagePath = `${KIT_PATH}${folderName}/${color}/${itemNumber}.png`;
+                    imagePath = `${KIT_PATH}${folderName}/${color}/${itemNumber}.png?v=${imgVers}`;
                 }
 
                 try {
@@ -816,49 +979,32 @@
             }
         }
 
-        // Prompt zip kit command
-        async function promptZipKit() {
-            if (!confirm(`Bạn có muốn tải xuống toàn bộ folder bộ sưu tập "${CURRENT_KIT_FOLDER}" thành file .zip không?`)) return;
-            
+        async function downloadZip() {
+            if (!CURRENT_KIT_FOLDER) {
+                alert('Vui lòng chọn một bộ sưu tập trước!');
+                return;
+            }
+
+            if (!confirm(`Bạn muốn tải xuống toàn bộ dữ liệu của "${CURRENT_KIT_FOLDER}"?\n\nLưu ý: Quá trình nén có thể mất hơn 1 phút tùy dung lượng.`)) return;
+
             try {
-                // Show loading message
-                const loadingMsg = document.createElement('div');
-                loadingMsg.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.8);color:white;padding:20px;border-radius:10px;z-index:9999;';
-                loadingMsg.textContent = 'Đang tạo file ZIP...';
-                document.body.appendChild(loadingMsg);
+                // Find the button to show loading state
+                const btn = document.querySelector('button[onclick="downloadZip()"]');
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang nén...';
 
-                const response = await fetch('/api/zip_kit', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ kit: CURRENT_KIT_FOLDER })
-                });
-
-                // Remove loading message
-                document.body.removeChild(loadingMsg);
-
-                if (response.ok) {
-                    // Get the blob from response
-                    const blob = await response.blob();
-                    
-                    // Create download link
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `${CURRENT_KIT_FOLDER}.zip`;
-                    document.body.appendChild(a);
-                    a.click();
-                    
-                    // Cleanup
-                    window.URL.revokeObjectURL(url);
-                    document.body.removeChild(a);
-                    
-                    alert('File ZIP đã được tải xuống!');
-                } else {
-                    const result = await response.json();
-                    alert("Lỗi: " + (result.message || 'Không thể tạo file ZIP'));
-                }
+                // We use window.location directly because fetch() will timeout on large/slow zip generation
+                // The browser will handle the long-running download automatically.
+                window.location.href = `/api/zip_kit?kit=${encodeURIComponent(CURRENT_KIT_FOLDER)}`;
+                
+                // We keep the button disabled for a bit to prevent multiple clicks
+                setTimeout(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }, 10000);
             } catch (error) {
-                alert("Không thể kết nối đến Server. Bạn có đang chạy app_server.py không?");
+                alert("Lỗi khi bắt đầu tải xuống.");
                 console.error(error);
             }
         }
@@ -891,7 +1037,239 @@
 
         // Initialize on load
         loadKitsList();
+
+        // Merge Workspace State
+        let mergeStack = [];
+        let mergeFilesList = [];
+        let mergeCanvas, mctx;
+
+        async function mergeLayers() {
+            if (!currentPart) return;
+            const folderName = currentPart.part.folder;
+            const color = currentColor || 'default';
+
+            document.getElementById('merge-folder-name').textContent = `${folderName} (${color})`;
+            document.getElementById('merge-modal-overlay').style.display = 'flex';
+            
+            // Initialize canvas if not yet done
+            if (!mergeCanvas) {
+                mergeCanvas = document.getElementById('merge-preview-canvas');
+                mctx = mergeCanvas.getContext('2d');
+            }
+
+            // Clear previous state
+            mergeStack = [];
+            document.getElementById('merge-stack-list').innerHTML = '';
+            document.getElementById('merge-dest-name').value = '1';
+            mctx.clearRect(0, 0, mergeCanvas.width, mergeCanvas.height);
+
+            try {
+                const response = await fetch('/api/list_part_images', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        kit: CURRENT_KIT_FOLDER, 
+                        folder: folderName,
+                        color: color
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    mergeFilesList = result.files;
+                    renderMergeLibrary();
+                } else {
+                    alert('Lỗi khi tải danh sách ảnh: ' + result.message);
+                }
+            } catch (error) {
+                console.error(error);
+            }
+        }
+
+        function renderMergeLibrary() {
+            const grid = document.getElementById('merge-library-grid');
+            grid.innerHTML = '';
+            const color = currentColor || 'default';
+            const folder = currentPart.part.folder;
+            const baseUrl = `${KIT_PATH}${folder}/${color === 'default' ? '' : color + '/'}`;
+
+            mergeFilesList.forEach(file => {
+                // Robustness: Handle both string (old server) and object (new server)
+                const filename = typeof file === 'string' ? file : file.filename;
+                
+                const div = document.createElement('div');
+                div.className = 'item-option';
+                div.innerHTML = `<img src="${baseUrl}${filename}?v=${imgVers}" title="${filename}">`;
+                div.onclick = () => addToStack(file);
+                grid.appendChild(div);
+            });
+        }
+
+        function addToStack(file) {
+            mergeStack.push(file);
+            renderStack();
+            redrawMergePreview();
+        }
+
+        function removeFromStack(index) {
+            mergeStack.splice(index, 1);
+            renderStack();
+            redrawMergePreview();
+        }
+
+        function renderStack() {
+            const list = document.getElementById('merge-stack-list');
+            list.innerHTML = '';
+            const color = currentColor || 'default';
+            const folder = currentPart.part.folder;
+            const baseUrl = `${KIT_PATH}${folder}/${color === 'default' ? '' : color + '/'}`;
+
+            mergeStack.forEach((file, idx) => {
+                const filename = typeof file === 'string' ? file : file.filename;
+                
+                const item = document.createElement('div');
+                item.className = 'stack-item';
+                item.innerHTML = `
+                    <span style="font-weight:bold; color:#666;">#${idx+1}</span>
+                    <img src="${baseUrl}${filename}?v=${imgVers}">
+                    <span style="flex:1; font-size:12px;">${filename}</span>
+                    <button class="btn" style="padding:2px 5px; background:#ff7675; color:white;" onclick="removeFromStack(${idx})">✖</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        async function redrawMergePreview() {
+            mctx.clearRect(0, 0, mergeCanvas.width, mergeCanvas.height);
+            const color = currentColor || 'default';
+            const folder = currentPart.part.folder;
+            const baseUrl = `${KIT_PATH}${folder}/${color === 'default' ? '' : color + '/'}`;
+
+            for (const file of mergeStack) {
+                const filename = typeof file === 'string' ? file : file.filename;
+                
+                const img = new Image();
+                img.src = `${baseUrl}${filename}?v=${imgVers}`;
+                await new Promise(resolve => {
+                    img.onload = () => {
+                        // FORCE CENTER as per user request (ignore metadata offsets)
+                        // This ensures user sees the item in the middle of the preview
+                        const x = (mergeCanvas.width - img.naturalWidth) / 2;
+                        const y = (mergeCanvas.height - img.naturalHeight) / 2;
+                        mctx.drawImage(img, x, y);
+                        resolve();
+                    };
+                    img.onerror = resolve;
+                });
+            }
+        }
+
+        function shuffleStack() {
+            for (let i = mergeStack.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [mergeStack[i], mergeStack[j]] = [mergeStack[j], mergeStack[i]];
+            }
+            renderStack();
+            redrawMergePreview();
+        }
+
+        function clearStack() {
+            mergeStack = [];
+            renderStack();
+            redrawMergePreview();
+        }
+
+        function closeMergeModal() {
+            document.getElementById('merge-modal-overlay').style.display = 'none';
+        }
+
+        async function confirmMerge() {
+            if (mergeStack.length === 0) {
+                alert('Vui lòng chọn ít nhất một ảnh để ghép!');
+                return;
+            }
+
+            const destName = document.getElementById('merge-dest-name').value.trim() || '1';
+            const bulkApply = document.getElementById('bulk-apply-check').checked;
+            const btn = document.getElementById('confirm-merge-btn');
+            
+            btn.disabled = true;
+            btn.textContent = '⏳ Đang lưu...';
+
+            try {
+                const response = await fetch('/api/merge_layers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder,
+                        color: currentColor || 'default',
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder,
+                        color: currentColor || 'default',
+                        selected_files: mergeStack.map(f => typeof f === 'string' ? f : f.filename),
+                        destination_name: destName,
+                        bulk_apply: bulkApply
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert(result.message);
+                    closeMergeModal();
+                    // Refresh the entire kit structure and selector
+                    loadKitStructure(true);
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Lỗi server khi ghép layer.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ Lưu';
+            }
+        }
     </script>
+    <!-- Merge Modal Workspace -->
+    <div id="merge-modal-overlay" class="modal-overlay">
+        <div class="merge-modal">
+            <div class="merge-header">
+                <h2>Ghép layer: <span id="merge-folder-name"></span></h2>
+                <button class="btn btn-secondary" onclick="closeMergeModal()">✖</button>
+            </div>
+            <div class="merge-content">
+                <div class="layer-library">
+                    <h3>📚 Thư viện ảnh</h3>
+                    <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Bấm vào ảnh để thêm vào danh sách ghép.</p>
+                    <div id="merge-library-grid" class="item-grid" style="grid-template-columns: repeat(3, 1fr);"></div>
+                </div>
+                <div class="preview-pane">
+                    <div class="preview-canvas-container">
+                        <canvas id="merge-preview-canvas" width="1436" height="1902"></canvas>
+                    </div>
+                </div>
+                <div class="stack-manager" style="display: flex; flex-direction: column;">
+                    <h3>🛠️ Thứ tự ghép</h3>
+                    <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Ảnh bên dưới sẽ nằm đè lên ảnh bên trên.</p>
+                    <div id="merge-stack-list" style="flex: 1; overflow-y: auto;"></div>
+                    <div style="margin-top: 15px;">
+                        <button class="btn btn-secondary" style="width: 100%; margin-bottom: 5px;" onclick="shuffleStack()">🎲 Random</button>
+                        <button class="btn btn-secondary" style="width: 100%; color: #ff7675;" onclick="clearStack()">🗑️ Xóa hết</button>
+                    </div>
+                </div>
+            </div>
+            <div class="merge-footer">
+                <div style="flex: 1; display: flex; align-items: center; gap: 15px;">
+                    <div>
+                        <input type="text" id="merge-dest-name" value="1" style="padding: 8px; border-radius: 6px; border: 1px solid #ddd; width: 100px;"> .png
+                    </div>
+                    <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 13px;">
+                        <input type="checkbox" id="bulk-apply-check"> Áp dụng tất cả màu
+                    </label>
+                </div>
+                <button id="confirm-merge-btn" class="btn" style="background: #00b894; color: white;" onclick="confirmMerge()">✅ Lưu</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

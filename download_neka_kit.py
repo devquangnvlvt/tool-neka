@@ -303,8 +303,8 @@ def get_color_code_from_filter(filter_data):
         
     return main_color.replace('#', '').upper()
 
-def reorganize_kit(metadata_path):
-    print(f"DEBUG: reorganize_kit called with {metadata_path}")
+def reorganize_kit(metadata_path, selected_y=None):
+    print(f"DEBUG: reorganize_kit called with {metadata_path}, selected_y={selected_y}")
     base_dir = os.path.dirname(metadata_path)
     
     with open(metadata_path, 'r', encoding='utf-8') as f:
@@ -374,10 +374,25 @@ def reorganize_kit(metadata_path):
     # --- End New Logic ---
     
     total_files = 0
+    multi_layer_folders = []
+    
+    # Load existing separated layers if we are doing partial download
+    json_path = os.path.join(base_dir, "separated_layers.json")
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                multi_layer_folders = json.load(f)
+        except:
+            pass
     
     for part_idx, part in enumerate(parts):
         if not isinstance(part, dict):
             continue
+        
+        nav_position = part_idx + 1  # Y index
+        if selected_y is not None and nav_position not in selected_y:
+            continue
+
         part_name = part.get('name', 'unnamed').replace(' ', '_').replace('/', '-')
         part_zindex = part.get('zIndex', 0)
         nav_position = part_idx + 1  # Y: navigation position (1-indexed)
@@ -393,6 +408,11 @@ def reorganize_kit(metadata_path):
         if part_toning_id:
             toning_ids.add(part_toning_id)
         
+        # Also check mainLayerToning
+        main_toning = part.get('mainLayerToning')
+        if main_toning:
+            toning_ids.add(main_toning)
+        
         # Also check addonLayers for more tonings
         addon_layers = part.get('addonLayers', [])
         if isinstance(addon_layers, list):
@@ -401,8 +421,24 @@ def reorganize_kit(metadata_path):
                     al_toning = al.get('toning')
                     if al_toning:
                         toning_ids.add(al_toning)
-
+        
+        # Check individual item layers for tonings (some kits have them here)
         items = part.get('items', [])
+        for item_layers in items:
+            if not isinstance(item_layers, list):
+                item_layers = [item_layers]
+            for layer in item_layers:
+                if isinstance(layer, dict):
+                    l_toning = layer.get('toning')
+                    if l_toning:
+                        toning_ids.add(l_toning)
+                    at_list = layer.get('addonTextures', [])
+                    for at in at_list:
+                        if isinstance(at, dict):
+                            at_toning = at.get('layer') or at.get('toning')
+                            if at_toning:
+                                toning_ids.add(at_toning)
+
         num_items = len(items)
 
         # Collect all unique colors from all tonings
@@ -490,7 +526,11 @@ def reorganize_kit(metadata_path):
         
         print(f"  ✓ Saved {num_items} thumbnails")
         
-        file_counter = 1
+        # Prepare merged folder
+        merged_base_dir = os.path.join(base_dir, "items_merged")
+        if not os.path.exists(merged_base_dir):
+            os.makedirs(merged_base_dir)
+        
         for color_data in colors:
             color_code = color_data["code"]
             gradients = color_data["gradients"]
@@ -500,7 +540,7 @@ def reorganize_kit(metadata_path):
                 lut = create_gradient_lut(gradients)
             
             # Target Dir logic
-            if is_flattened or color_code == "default":
+            if color_code == "default":
                 target_dir = os.path.join(base_dir, "items_structured", folder_name)
             else:
                 target_dir = os.path.join(base_dir, "items_structured", folder_name, color_code)
@@ -508,11 +548,8 @@ def reorganize_kit(metadata_path):
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
             
-            # Sequential naming: 1.png, 2.png...
-            # If not flattened, each color has its own folder, so reset.
-            # If flattened, they all go in the same folder, so DON'T reset.
-            if not is_flattened:
-                file_counter = 1
+            # Reset file counter for each color folder
+            file_counter = 1
             
             for item_idx, item_layers in enumerate(items):
                 if not isinstance(item_layers, list): item_layers = [item_layers]
@@ -522,11 +559,18 @@ def reorganize_kit(metadata_path):
                 for layer in item_layers:
                     if not isinstance(layer, dict):
                         continue
+                        
+                    crop = layer.get('crop', {})
+                    lx = crop.get('x', 0)
+                    ly = crop.get('y', 0)
+                    
                     # 1. Main blob
                     if layer.get('blob'):
                         all_blobs_to_process.append({
                             "blob": layer.get('blob'),
-                            "toning_id": part_toning_id # Default toning
+                            "toning_id": part_toning_id, # Default toning
+                            "x": lx,
+                            "y": ly
                         })
                     
                     # 2. Addon textures in this layer
@@ -535,10 +579,21 @@ def reorganize_kit(metadata_path):
                         if isinstance(at, dict) and at.get('blob'):
                              # Addon textures usually follow the part's toning or have their own
                              at_toning = at.get('layer') or part_toning_id
+                             at_crop = at.get('crop', {})
                              all_blobs_to_process.append({
                                  "blob": at.get('blob'),
-                                 "toning_id": at_toning
+                                 "toning_id": at_toning,
+                                 "x": at_crop.get('x', lx), # Fallback to layer x
+                                 "y": at_crop.get('y', ly)  # Fallback to layer y
                              })
+                
+                if len(all_blobs_to_process) > 1:
+                    if folder_name not in multi_layer_folders:
+                        multi_layer_folders.append(folder_name)
+                        # Save incrementally
+                        json_path = os.path.join(base_dir, "separated_layers.json")
+                        with open(json_path, 'w', encoding='utf-8') as f:
+                            json.dump(multi_layer_folders, f, ensure_ascii=False, indent=4)
 
                 for task in all_blobs_to_process:
                     blob = task["blob"]
@@ -579,6 +634,52 @@ def reorganize_kit(metadata_path):
                         
                     except Exception as e:
                         print(f"  Error handling blob {blob}: {e}")
+
+                # --- Merge logic: Create a composite of all layers for this item ---
+                # Only merge if there are multiple layers ("layer tách")
+                if len(all_blobs_to_process) > 1:
+                    try:
+                        # Use ow, oh from the first blob that has it
+                        ow, oh = 1436, 1902 # Defaults
+                        for layer in item_layers:
+                            if isinstance(layer, dict) and layer.get('crop'):
+                                ow = layer['crop'].get('ow', ow)
+                                oh = layer['crop'].get('oh', oh)
+                                break
+                        
+                        merged_img = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
+                        
+                        # Re-calculate indices to find where they were saved
+                        temp_counter = file_counter - len(all_blobs_to_process)
+                        
+                        for task in all_blobs_to_process:
+                            layer_filename = f"{temp_counter}.png"
+                            layer_path = os.path.join(target_dir, layer_filename)
+                            
+                            if os.path.exists(layer_path):
+                                l_img = Image.open(layer_path).convert("RGBA")
+                                # Fix misalignment: only paste at (x, y) if the image is NOT full-size
+                                if l_img.size == (ow, oh):
+                                    merged_img.paste(l_img, (0, 0), l_img)
+                                else:
+                                    merged_img.paste(l_img, (task['x'], task['y']), l_img)
+                            
+                            temp_counter += 1
+                        
+                        # Save merged result
+                        merged_item_dir = os.path.join(merged_base_dir, folder_name)
+                        if color_code != "default":
+                            merged_item_dir = os.path.join(merged_item_dir, color_code)
+                        
+                        if not os.path.exists(merged_item_dir):
+                            os.makedirs(merged_item_dir)
+                            
+                        merged_filename = f"{item_idx + 1}.png"
+                        merged_path = os.path.join(merged_item_dir, merged_filename)
+                        merged_img.save(merged_path)
+                        
+                    except Exception as e:
+                        print(f"  Error merging layers for item {item_idx + 1}: {e}")
 
     print(f"Done! Created {total_files} colored files in 'items_structured'.")
 
@@ -630,6 +731,38 @@ if __name__ == "__main__":
     
     # Step 4: Reorganize and download images
     print("\nStarting image download and organization...")
-    reorganize_kit(final_metadata_path)
+    
+    # Handle selective download flag
+    is_selective = "--y" in sys.argv
+    selected_y = None
+    
+    if is_selective:
+        print("\n--- SELECTIVE DOWNLOAD MODE ---")
+        parts = kit.get('data', {}).get('parts', [])
+        print("Available Layers (Y Indices):")
+        for idx, part in enumerate(parts):
+            p_name = part.get('name', 'unnamed')
+            print(f" [{idx + 1}] {p_name}")
+        
+        print("\nEnter Y indices to download (e.g. 1,3,5-10) or 'all':")
+        user_input = input("> ").strip().lower()
+        
+        if user_input != 'all' and user_input != '':
+            selected_y = set()
+            try:
+                # Simple parser for "1,3,5-10"
+                for chunk in user_input.split(','):
+                    if '-' in chunk:
+                        start, end = map(int, chunk.split('-'))
+                        for i in range(start, end + 1):
+                            selected_y.add(i)
+                    else:
+                        selected_y.add(int(chunk))
+                print(f"Targeting layers: {sorted(list(selected_y))}")
+            except Exception as e:
+                print(f"Invalid input format: {e}. Downloading ALL.")
+                selected_y = None
+
+    reorganize_kit(final_metadata_path, selected_y=selected_y)
     
     print(f"\n✓ Complete! Check: {base_dir}/items_structured/")

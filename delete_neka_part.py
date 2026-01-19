@@ -83,9 +83,43 @@ def delete_part(kit_folder, part_y):
                     
                     if not success:
                         print(f"CRITICAL: Failed to rename {old_path} after {retry_count} attempts.")
-                        # If we can't rename, we might be in trouble, but let's try to finish others
+            
+            # 3. Synchronize separated_layers.json if it exists
+            sep_layers_path = os.path.join(base_path, "downloads", kit_folder, "separated_layers.json")
+            if os.path.exists(sep_layers_path):
+                print(f"DEBUG: Updating {sep_layers_path}")
+                try:
+                    with open(sep_layers_path, 'r', encoding='utf-8') as f:
+                        separated_layers = json.load(f)
+                    
+                    new_separated_layers = []
+                    for folder_name in separated_layers:
+                        # Parse X-Y
+                        match = re.match(r"^(\d+)-(\d+)$", folder_name)
+                        if match:
+                            x = int(match.group(1))
+                            y = int(match.group(2))
+                            
+                            if y == part_y:
+                                # This part is being deleted, skip it
+                                continue
+                            elif y > part_y:
+                                # Re-index down
+                                new_separated_layers.append(f"{x}-{y-1}")
+                            else:
+                                # Keep as is
+                                new_separated_layers.append(folder_name)
+                        else:
+                            # Not matching X-Y pattern, just keep it (safety)
+                            new_separated_layers.append(folder_name)
+                    
+                    with open(sep_layers_path, 'w', encoding='utf-8') as f:
+                        json.dump(new_separated_layers, f, ensure_ascii=False, indent=2)
+                    print(f"DEBUG: Updated separated_layers.json with {len(new_separated_layers)} entries.")
+                except Exception as e:
+                    print(f"ERROR: Failed to update separated_layers.json: {e}")
 
-        return True, f"Successfully deleted folders for part index {part_y} and re-indexed subsequent folders."
+        return True, f"Successfully deleted folders for part index {part_y} and updated separated_layers.json."
 
     except Exception as e:
         import traceback
