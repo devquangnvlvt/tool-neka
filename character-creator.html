@@ -571,6 +571,7 @@
                         <div style="display: flex; gap: 5px;">
                             <button id="layer-details-btn" class="btn" style="background: #7c3aed; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="showCurrentItemLayers()">📋 Chi tiết layer</button>
                             <button id="merge-part-btn" class="btn" style="background: #00b894; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="mergeLayers()">🪄 Ghép layer</button>
+                            <button id="flatten-colors-btn" class="btn" style="background: #e67e22; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="flattenColors()">💨 Gộp folder</button>
                             <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa</button>
                         </div>
                     </div>
@@ -859,6 +860,14 @@
                 mergeBtn.style.display = 'block';
             } else {
                 mergeBtn.style.display = 'none';
+            }
+
+            // Show flatten button only if has color folders
+            const flattenBtn = document.getElementById('flatten-colors-btn');
+            if (part.has_colors) {
+                flattenBtn.style.display = 'block';
+            } else {
+                flattenBtn.style.display = 'none';
             }
 
             // Reset item to 1 for new part
@@ -1607,9 +1616,10 @@
         // Prompt delete part command
         async function promptDeletePart() {
             if (!currentPart) return;
-            const yIndex = currentPart.index + 1;
+            const yIndex = currentPart.part.y;
+            const folderName = currentPart.part.folder;
             
-            if (!confirm(`Bạn có muốn XÓA VĨNH VIỄN bộ phận "${currentPart.part.name}" (Folder index ${currentPart.folderName})?\n\nLưu ý: Hành động này sẽ tự động đổi tên các folder phía sau để lấp khoảng trống.`)) return;
+            if (!confirm(`Bạn có muốn XÓA VĨNH VIỄN bộ phận "${folderName}"?\n\nLưu ý: Hành động này sẽ tự động đổi tên các folder phía sau để lấp khoảng trống.`)) return;
             
             showLoading('Đang xóa bộ phận và cập nhật chỉ số folder...');
             
@@ -1662,6 +1672,36 @@
                 if (result.success) {
                     alert('Đổi tên thành công!');
                     loadKitStructure(true);
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch (error) {
+                console.error(error);
+                alert('Lỗi kết nối server');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function flattenColors() {
+            if(!currentPart) return;
+            if(!confirm(`Bạn chắc chắn muốn GỘP TẤT CẢ layer từ các folder màu ra ngoài root của part ${currentPart.part.folder}?\nHành động này sẽ XÓA các folder màu sau khi gộp.`)) return;
+            
+            showLoading('Đang gộp màu...');
+            try {
+                const response = await fetch('/api/flatten_colors', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('Gộp màu thành công! Thư mục đã được làm phẳng.');
+                    document.getElementById('file-debug-modal').style.display = 'none'; // Close modal if open
+                    loadKitStructure(true); // Refresh main UI
                 } else {
                     alert('Lỗi: ' + result.message);
                 }
@@ -1925,7 +1965,9 @@
                     Đóng
                 </button>
               </div>
-            <h3>Danh sách file trong folder</h3>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <h3>Danh sách file trong folder</h3>
+            </div>
             <p id="file-debug-subtitle" style="color: #888; margin-bottom: 20px;">Đang tải...</p>
             
             <div id="file-debug-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px;">

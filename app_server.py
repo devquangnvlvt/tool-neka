@@ -58,6 +58,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_get_kit_structure(data)
         elif self.path == '/api/get_kits_list':
             self.handle_get_kits_list(data)
+        elif self.path == '/api/flatten_colors':
+            self.handle_flatten_colors(data)
         elif self.path == '/api/list_part_images':
             self.handle_list_part_images(data)
         elif self.path == '/api/rename_folder':
@@ -781,6 +783,90 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, str(e))
+
+    def handle_flatten_colors(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+
+        if not kit_folder or not folder_name:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
+
+            if not os.path.exists(target_dir):
+                self.send_api_response(False, "Folder not found")
+                return
+
+            # 1. Collect all images from subfolders
+            images_to_move = []
+            subfolders = []
+
+            items = os.listdir(target_dir)
+            for item in items:
+                item_path = os.path.join(target_dir, item)
+                if os.path.isdir(item_path):
+                    subfolders.append(item_path)
+                    for root, dirs, files in os.walk(item_path):
+                        for file in files:
+                            if file.lower().endswith('.png'):
+                                images_to_move.append(os.path.join(root, file))
+
+            if not images_to_move:
+                 # Clean up empty folders anyway
+                 cleaned = 0
+                 for sub in subfolders:
+                     try:
+                         shutil.rmtree(sub)
+                         cleaned += 1
+                     except: pass
+                 
+                 msg = "No images to flatten."
+                 if cleaned > 0: msg += f" Removed {cleaned} empty folders."
+                 self.send_api_response(True, msg)
+                 return
+
+            # 2. Determine max index in root to avoid overwriting (optional, but requested sequential)
+            # Actually, user wants "1.png, 2.png..." in root.
+            # Best to move them all and rename to next available number.
+            
+            root_files = os.listdir(target_dir)
+            indices = []
+            for f in root_files:
+                if f.endswith('.png'):
+                    match = re.search(r"^(\d+)\.png$", f)
+                    if match: indices.append(int(match.group(1)))
+            
+            next_idx = max(indices) + 1 if indices else 1
+            moved_count = 0
+
+            for old_path in images_to_move:
+                new_fn = f"{next_idx}.png"
+                new_path = os.path.join(target_dir, new_fn)
+                
+                # Check if new_path exists (unlikely given logic)
+                while os.path.exists(new_path):
+                    next_idx += 1
+                    new_fn = f"{next_idx}.png"
+                    new_path = os.path.join(target_dir, new_fn)
+                
+                shutil.move(old_path, new_path)
+                moved_count += 1
+                next_idx += 1
+
+            # 3. Remove now empty (or all) color subfolders
+            for sub in subfolders:
+                try:
+                    shutil.rmtree(sub)
+                except Exception as e:
+                    print(f"Error removing subfolder {sub}: {e}")
+
+            self.send_api_response(True, f"Successfully moved {moved_count} images to root and removed empty folders.")
+
+        except Exception as e:
+            self.send_api_response(False, f"Flatten error: {str(e)}")
 
     def handle_list_part_images(self, data):
         kit_folder = data.get('kit')
