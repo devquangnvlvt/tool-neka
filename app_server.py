@@ -21,6 +21,16 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_api_response(False, "Missing kit parameter")
             return
+        elif parsed_path.path == '/api/debug_folder_files':
+            query = parse_qs(parsed_path.query)
+            kit = query.get('kit', [None])[0]
+            folder = query.get('folder', [None])[0]
+            color = query.get('color', [None])[0]
+            if kit and folder:
+                self.handle_debug_folder_files({"kit": kit, "folder": folder, "color": color})
+            else:
+                self.send_api_response(False, "Missing kit or folder params")
+            return
         return super().do_GET()
 
     def do_POST(self):
@@ -32,6 +42,16 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_delete_part(data)
         elif self.path == '/api/zip_kit':
             self.handle_zip_kit(data)
+        elif self.path == '/api/rename_folder':
+            self.handle_rename_folder(data)
+        elif self.path == '/api/get_item_layers':
+            self.handle_get_item_layers(data)
+        elif self.path == '/api/create_thumb':
+            self.handle_create_thumb(data)
+        elif self.path == '/api/delete_file':
+            self.handle_delete_file(data)
+        elif self.path == '/api/rename_file':
+            self.handle_rename_file(data)
         elif self.path == '/api/merge_layers':
             self.handle_merge_layers(data)
         elif self.path == '/api/get_kit_structure':
@@ -150,7 +170,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     "x": x, "y": y, "folder": entry,
                     "items_count": num_items, "colors": colors,
                     "is_separated": entry in separated_folders,
-                    "item_layer_counts": item_layer_counts
+                    "item_layer_counts": item_layer_counts,
+                    "has_colors": len(colors) > 0
                 })
 
             # Check for duplicate X values
@@ -401,13 +422,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
-
-    def handle_merge_layers(self, data):
+    def handle_debug_folder_files(self, data):
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
-        selected_files = data.get('selected_files')
-        dest_name = data.get('destination_name', 'merged_result')
-        bulk_apply = data.get('bulk_apply', False)
         color = data.get('color')
 
         if not kit_folder or not folder_name:
@@ -415,24 +432,248 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            
+            # Target structured folder
+            struct_base = os.path.join(kit_path, "items_structured", folder_name)
+            
+            target_dir = struct_base
+            is_subcolor = False
+            if color and color != 'default':
+                target_dir = os.path.join(struct_base, color)
+                is_subcolor = True
+
+            if not os.path.exists(target_dir):
+                self.send_api_response(False, f"Directory not found: {target_dir}")
+                return
+
+            file_list = []
+            
+            # Helper to add files
+            def add_files_from(path, label_prefix=""):
+                if not os.path.exists(path): return
+                for entry in sorted(os.listdir(path)):
+                    full_p = os.path.join(path, entry)
+                    if os.path.isfile(full_p):
+                        # Simple check for images
+                        is_img = entry.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp'))
+                        
+                        relative_path = os.path.relpath(full_p, kit_path).replace("\\", "/")
+                        url = f"/downloads/{kit_folder}/{relative_path}"
+                        
+                        file_list.append({
+                            "name": entry,
+                            "url": url,
+                            "is_image": is_img,
+                            "location": "current" if not label_prefix else label_prefix
+                        })
+
+            # 1. Add files from the target directory (color folder or main folder)
+            add_files_from(target_dir, "Color/Sub" if is_subcolor else "Main")
+
+            # 2. If inside a color subfolder, ALSO check the parent (Main) folder for specific files like nav.png or common thumbnails
+            if is_subcolor:
+                # Check for nav.png explicitly in parent
+                parent_files_to_check = ["nav.png"]
+                
+                # Also check for ALL thumb_*.png in parent (since thumbnails are usually shared or stored in root)
+                if os.path.exists(struct_base):
+                    for entry in os.listdir(struct_base):
+                        if entry == "nav.png" or entry.startswith("thumb_"):
+                             parent_files_to_check.append(entry)
+
+                # Remove duplicates if added strictly
+                parent_files_to_check = list(set(parent_files_to_check))
+
+                for p_file in parent_files_to_check:
+                    p_path = os.path.join(struct_base, p_file)
+                    if os.path.exists(p_path) and os.path.isfile(p_path):
+                        # Avoid duplicates if they somehow exist in subfolder (unlikely but safe)
+                        if not any(f['name'] == p_file for f in file_list):
+                             file_list.append({
+                                "name": p_file,
+                                "url": f"/downloads/{kit_folder}/items_structured/{folder_name}/{p_file}",
+                                "is_image": True,
+                                "location": "Parent (Main)"
+                            })
+
+
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({"success": True, "files": file_list})
+            self.wfile.write(response.encode('utf-8'))
+
+        except Exception as e:
+            self.send_api_response(False, f"Error listing files: {str(e)}")
+
+    def handle_create_thumb(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        source_file = data.get('source_file') # e.g. "1.png"
+        target_file = data.get('target_file') # e.g. "thumb_1.png"
+        color = data.get('color')
+
+        if not kit_folder or not folder_name or not source_file or not target_file:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
             from PIL import Image
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_dir = os.path.join(base_path, "downloads", kit_folder)
-            structured_dir = os.path.join(kit_dir, "items_structured", folder_name)
-            merged_base_dir = os.path.join(kit_dir, "items_merged", folder_name)
+            kit_path = os.path.join(base_path, "downloads", kit_folder)
             
-            if not os.path.exists(structured_dir):
-                self.send_api_response(False, f"Directory not found: {folder_name}")
+            # Determine directory
+            struct_base = os.path.join(kit_path, "items_structured", folder_name)
+            target_dir = struct_base
+            if color and color != 'default':
+                target_dir = os.path.join(struct_base, color)
+            
+            # Construct paths
+            # Note: source_file sent from frontend is just the filename in the current view
+            # But wait, if we are in a subcolor, the source might be in Parent (nav.png) or Current (1.png)
+            # The frontend should probably send the logic location or we try to find it.
+            
+            source_path = os.path.join(target_dir, source_file)
+            
+            # If not found in target_dir (subcolor), check parent
+            if not os.path.exists(source_path) and color and color != 'default':
+                 source_path = os.path.join(struct_base, source_file)
+
+            if not os.path.exists(source_path):
+                self.send_api_response(False, f"Source file not found: {source_file}")
                 return
+            
+            target_path = os.path.join(struct_base, target_file)
+            
+            with Image.open(source_path) as img:
+                img.thumbnail((200, 200))
+                img.save(target_path)
+            
+            self.send_api_response(True, f"Created {target_file}")
+
+        except Exception as e:
+             self.send_api_response(False, f"Error creating thumbnail: {str(e)}")
+
+
+        except Exception as e:
+             self.send_api_response(False, f"Error creating thumbnail: {str(e)}")
+
+    def handle_delete_file(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        filename = data.get('filename')
+        color = data.get('color')
+
+        if not kit_folder or not folder_name or not filename:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            # Determine directory
+            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
+            if color and color != 'default':
+                # Check if file is in color folder or parent
+                # Security: Prevent escaping
+                pass
+            
+            # Since we have logic for Parent/Current location in frontend, we should probably rely on exact path resolution
+            # But "Parent" files (nav.png) might be shared. Deleting them affects all. 
+            # For this simple tool, let's assume we delete from the resolved path.
+            
+            # Simple resolution:
+            path_primary = os.path.join(target_dir, color if color and color != 'default' else "", filename)
+            path_parent = os.path.join(target_dir, filename)
+
+            target_path = path_primary
+            if not os.path.exists(target_path) and os.path.exists(path_parent):
+                target_path = path_parent
+            
+            if not os.path.exists(target_path):
+                self.send_api_response(False, f"File not found: {filename}")
+                return
+
+            os.remove(target_path)
+            self.send_api_response(True, f"Deleted {filename}")
+
+        except Exception as e:
+            self.send_api_response(False, f"Error deleting file: {str(e)}")
+
+    def handle_rename_file(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        old_name = data.get('old_name')
+        new_name = data.get('new_name')
+        color = data.get('color')
+
+        if not kit_folder or not folder_name or not old_name or not new_name:
+            self.send_api_response(False, "Missing parameters")
+            return
+            
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
+            
+            # Path Logic
+            path_primary = os.path.join(target_dir, color if color and color != 'default' else "", old_name)
+            path_parent = os.path.join(target_dir, old_name)
+            
+            current_path = path_primary
+            if not os.path.exists(current_path) and os.path.exists(path_parent):
+                current_path = path_parent
+                
+            if not os.path.exists(current_path):
+                self.send_api_response(False, f"File not found: {old_name}")
+                return
+                
+            # New path must be in the SAME directory as the old one
+            new_path = os.path.join(os.path.dirname(current_path), new_name)
+            
+            if os.path.exists(new_path):
+                self.send_api_response(False, f"File already exists: {new_name}")
+                return
+                
+            os.rename(current_path, new_path)
+            self.send_api_response(True, f"Renamed to {new_name}")
+            
+        except Exception as e:
+            self.send_api_response(False, f"Error renaming file: {str(e)}")
+
+
+    def handle_merge_layers(self, data):
+        from PIL import Image
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        selected_files = data.get('selected_files', [])
+        dest_name = data.get('destination_name', '1')
+        color = data.get('color', 'default')
+        bulk_apply = data.get('bulk_apply', False)
+
+        if not kit_folder or not folder_name or not selected_files:
+            self.send_api_response(False, "Missing parameters (need kit, folder, selected_files)")
+            return
+
+        try:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            structured_dir = os.path.join(kit_path, "items_structured", folder_name)
+
+            if not os.path.exists(structured_dir):
+                self.send_api_response(False, "Folder not found")
+                return
+
+            print(f"[Merge] Stacking {selected_files} into {dest_name}.png in {folder_name}")
 
             # Load metadata for offsets
             offsets = {} 
             try:
-                # Resolve alias first to find the metadata index key
                 match = re.search(r"-(\d+)$", folder_name)
                 if match:
                     part_idx = int(match.group(1)) - 1
-                    meta_path = os.path.join(kit_dir, "metadata.json")
+                    meta_path = os.path.join(kit_path, "metadata.json")
                     if os.path.exists(meta_path):
                         with open(meta_path, 'r', encoding='utf-8') as f:
                             meta = json.load(f)
@@ -449,19 +690,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 print(f"[Merge] Metadata error: {e}")
 
             def perform_merge(src, target_fn, files_to_stack, is_default_color=False):
-                if not os.path.exists(src): 
-                    print(f"[Merge] Directory not found: {src}")
-                    return False
-                
-                print(f"[Merge] Starting in: {src}")
-                print(f"[Merge] Stacking files: {files_to_stack} -> {target_fn}.png")
+                if not os.path.exists(src): return False
                 
                 ow, oh = 1436, 1902
-                # Try to detect canvas size from full metadata if possible, or fallback to standard Neka
-                # For now, keep 1436x1902 as default/target, but maybe expand if source images are bigger?
-                # Actually, check the FIRST offset's expected parent size?
-                # Safer: Use max dimension found + offset?
-                # Simplest: If any image is 2048x2048, use that.
                 for fn in files_to_stack:
                     p = os.path.join(src, fn)
                     if os.path.exists(p):
@@ -476,18 +707,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     if os.path.exists(p):
                         try:
                             with Image.open(p) as l_img:
-                                # Determine offset
                                 x, y = 0, 0
                                 if fn in offsets:
-                                    # If metadata has offset, use it. 
-                                    # BUT if image is full-size (1436x1902 or 2048x2048), usually offset is irrelevant or 0?
-                                    # Actually, if cropped image is small, use offset.
                                     w, h = l_img.size
                                     if w < ow or h < oh:
                                         x = offsets[fn]['x']
                                         y = offsets[fn]['y']
-                                
-                                # Ensure we load the data before closing
                                 img.paste(l_img.convert("RGBA"), (x, y), l_img.convert("RGBA"))
                             valid_merge = True
                         except Exception as e:
@@ -497,16 +722,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     temp_fn = f"_tmp_merge_{target_fn}.png"
                     temp_path = os.path.join(src, temp_fn)
                     img.save(temp_path)
-                    print(f"[Merge] Temp file saved: {temp_path}")
                     
-                    # Delete source files and their thumbnails (if in default color)
                     for fn in files_to_stack:
                         try:
                             p = os.path.join(src, fn)
                             if os.path.exists(p):
                                 os.remove(p)
-                                print(f"[Merge] Deleted source: {p}")
-                            
                             if is_default_color:
                                 match = re.match(r"^(\d+)\.png$", fn)
                                 if match:
@@ -517,60 +738,47 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         except Exception as e:
                             print(f"[Merge] Warning: Could not delete {fn}: {e}")
                     
-                    # Save the merged file
                     final_path = os.path.join(src, f"{target_fn}.png")
                     if os.path.exists(final_path):
-                        try:
-                            os.remove(final_path)
-                        except Exception as e:
-                            print(f"[Merge] Warning: Could not remove existing target {final_path}: {e}")
+                        try: os.remove(final_path)
+                        except: pass
                     
                     try:
                         os.rename(temp_path, final_path)
-                        print(f"[Merge] Renamed temp to final: {final_path}")
                     except Exception as e:
-                        print(f"[Merge] Error renaming temp to final: {e}")
-                        # Fallback: try copy/remove
                         shutil.copy2(temp_path, final_path)
                         os.remove(temp_path)
 
-                    # Generate new thumbnail if this is the default color folder
                     if is_default_color:
                         try:
                             thumb = img.copy()
                             thumb.thumbnail((200, 200))
                             thumb.save(os.path.join(src, f"thumb_{target_fn}.png"))
-                            print(f"[Merge] Generated thumbnail: thumb_{target_fn}.png")
                         except Exception as e:
                             print(f"[Merge] Error generating thumbnail: {e}")
-
                     return True
                 return False
 
             total_count = 0
-            if selected_files:
-                is_default = (not color or color == 'default')
-                target_src = structured_dir
-                if color and color != 'default':
-                    target_src = os.path.join(structured_dir, color)
-                
-                if perform_merge(target_src, dest_name, selected_files, is_default_color=is_default):
-                    total_count += 1
-                
-                if bulk_apply:
-                    # Apply to default if we were in a subcolor
-                    if not is_default:
-                        if perform_merge(structured_dir, dest_name, selected_files, is_default_color=True):
+            is_default = (not color or color == 'default')
+            target_src = structured_dir
+            if color and color != 'default':
+                target_src = os.path.join(structured_dir, color)
+            
+            if perform_merge(target_src, dest_name, selected_files, is_default_color=is_default):
+                total_count += 1
+            
+            if bulk_apply:
+                if not is_default:
+                    if perform_merge(structured_dir, dest_name, selected_files, is_default_color=True):
+                        total_count += 1
+                for d in os.listdir(structured_dir):
+                    sub = os.path.join(structured_dir, d)
+                    if os.path.isdir(sub) and (not color or d != color):
+                        if perform_merge(sub, dest_name, selected_files, is_default_color=False):
                             total_count += 1
-                    # Apply to all other subfolders
-                    for d in os.listdir(structured_dir):
-                        sub = os.path.join(structured_dir, d)
-                        if os.path.isdir(sub) and (not color or d != color):
-                            if perform_merge(sub, dest_name, selected_files, is_default_color=False):
-                                total_count += 1
-                self.send_api_response(True, f"Đã ghép xong {total_count} thư mục và lưu thay thế vào {dest_name}.png")
-            else:
-                self.send_api_response(False, "Cần chọn ít nhất một ảnh để ghép.")
+            self.send_api_response(True, f"Đã ghép xong {total_count} thư mục và lưu thay thế vào {dest_name}.png")
+
         except Exception as e:
             self.send_api_response(False, str(e))
 

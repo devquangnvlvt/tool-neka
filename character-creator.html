@@ -501,7 +501,32 @@
             font-weight: 500;
             letter-spacing: 0.5px;
         }
-        </style>
+            .file-debug-item {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            transition: background 0.2s;
+        }
+        .file-debug-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .file-debug-item img {
+            width: 100%;
+            height: 100px;
+            object-fit: contain;
+            background: repeating-conic-gradient(#333 0% 25%, #444 0% 50%) 50% / 20px 20px;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .file-debug-item span {
+            display: block;
+            font-size: 12px;
+            color: #ddd;
+            word-break: break-all;
+        }
+     
+    </style>
 </head>
 
 <body>
@@ -816,9 +841,13 @@
             // Update part name
             // Update part name with Rename button
             const nameContainer = document.getElementById('current-part-name');
+            
             nameContainer.innerHTML = `
                 ${part.folder}
-                <button class="btn" style="padding:2px 6px; font-size:12px; margin-left:8px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này">✎</button>
+                <div class="btn-group" style="display:inline-flex; gap:5px; margin-left:8px;">
+                     <button class="btn" style="padding:2px 6px; font-size:12px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này">✎</button>
+                     <button class="btn" style="padding:2px 6px; font-size:12px; background:#3498db;" onclick="showFolderFiles()" title="Xem file trong folder">📂</button>
+                </div>
             `;
 
            
@@ -1224,6 +1253,347 @@
             showLayerDetails(currentPart.part.folder, currentItem, { stopPropagation: () => {} });
         }
 
+        // Show folder files debug modal
+        async function showFolderFiles() {
+            if (!currentPart) return;
+            
+            const modal = document.getElementById('file-debug-modal');
+            const grid = document.getElementById('file-debug-grid');
+            const subtitle = document.getElementById('file-debug-subtitle');
+            
+            modal.style.display = 'flex';
+            grid.innerHTML = '';
+            subtitle.textContent = `Đang tải danh sách file cho part: ${currentPart.part.name} (${currentPart.part.folder})...`;
+
+            try {
+                // Determine color
+                // Let's try to query the active color button in the UI
+                const activeColorBtn = document.querySelector('.color-btn.active');
+                let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+                // Fix: Check if color param is actually valid (not undefined/null string due to dataset issue)
+                // The dataset attribute is data-color-folder in loadColors function
+                const activeColorOption = document.querySelector('.color-option.active');
+                if (activeColorOption) {
+                    colorParam = activeColorOption.dataset.colorFolder;
+                }
+
+                const params = new URLSearchParams({
+                    kit: CURRENT_KIT_FOLDER,
+                    folder: currentPart.part.folder
+                });
+                if (colorParam) params.append('color', colorParam);
+
+                const response = await fetch(`/api/debug_folder_files?${params.toString()}`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    subtitle.textContent = `Folder: ${currentPart.part.folder} ${colorParam ? '/ ' + colorParam : ''} (Tổng: ${result.files.length} files)`;
+                    
+                    if (result.files.length === 0) {
+                        grid.innerHTML = '<p style="grid-column: 1/-1; text-align: center; color: #888;">Thư mục trống</p>';
+                        return;
+                    }
+
+                    // Group files by Item ID (e.g. "1") or "nav"
+                    const groups = {}; // { '1': { main: file, thumb: file }, 'nav': { main: file } }
+                    const others = [];
+
+                    result.files.forEach(file => {
+                        // Check for Main Image: "1.png"
+                        if (file.name.match(/^\d+\.png$/)) {
+                            const id = file.name.split('.')[0];
+                            if (!groups[id]) groups[id] = {};
+                            groups[id].main = file;
+                        } 
+                        // Check for Thumb Image: "thumb_1.png"
+                        else if (file.name.match(/^thumb_\d+\.png$/)) {
+                            const id = file.name.split('.')[0].replace('thumb_', '');
+                            if (!groups[id]) groups[id] = {};
+                            groups[id].thumb = file;
+                        }
+                        // Check for nav.png
+                        else if (file.name === 'nav.png') {
+                             if (!groups['nav']) groups['nav'] = {};
+                             groups['nav'].main = file;
+                        }
+                        else {
+                            others.push(file);
+                        }
+                    });
+
+                    // Clear grid but set up layout
+                    grid.style.display = 'block'; 
+                    grid.innerHTML = `
+                        <div style="display: flex; gap: 20px; align-items: flex-start;">
+                            <div id="debug-main-list" style="flex: 10; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px;"></div>
+                            <div id="debug-sidebar" style="flex: 2; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #444; padding-left: 20px;"></div>
+                        </div>
+                    `;
+                    
+                    const mainList = document.getElementById('debug-main-list');
+                    const sidebar = document.getElementById('debug-sidebar');
+                    const timestamp = new Date().getTime();
+
+                    // Render Groups (Sorted by ID number)
+                    const sortedIds = Object.keys(groups).sort((a, b) => {
+                        if (a === 'nav') return -1;
+                        if (b === 'nav') return 1;
+                        return parseInt(a) - parseInt(b);
+                    });
+
+                    sortedIds.forEach(id => {
+                        const group = groups[id];
+                        
+                        // Special handling for NAV -> Move to Sidebar
+                        if (id === 'nav') {
+                             const navContainer = document.createElement('div');
+                             navContainer.className = 'file-debug-group';
+                             navContainer.style.cssText = 'background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;';
+                             
+                             navContainer.innerHTML += `<div style="font-weight:bold; color:#aaa; margin-bottom:5px;">NAV ICON</div>`;
+                             
+                             if (group.main) {
+                                  navContainer.innerHTML += `
+                                    <div class="file-debug-slot" title="${group.main.name}">
+                                        <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain;">
+                                        <span>${group.main.name}</span>
+                                    </div>
+                                 `;
+                             }
+                             if (group.thumb) {
+                                  navContainer.innerHTML += `
+                                    <div style="color:#666; font-size:10px;">⬇️</div>
+                                    <div class="file-debug-slot" title="${group.thumb.name}">
+                                        <img src="${group.thumb.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain;">
+                                        <span>${group.thumb.name}</span>
+                                    </div>
+                                 `;
+                             }
+
+                             sidebar.appendChild(navContainer);
+                             return; 
+                        }
+
+                        // REGULAR ITEMS -> Horizontal Layout (Row)
+                        const container = document.createElement('div');
+                        container.className = 'file-debug-group';
+                        // Changed flex-direction to row for side-by-side
+                        container.style.cssText = 'background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: row; align-items: center; justify-content: space-around; gap: 10px;';
+
+                        // Main Slot
+                        if (group.main) {
+                             container.innerHTML += `
+                                <div class="file-debug-slot" title="${group.main.name}" 
+                                     draggable="true" ondragstart="handleDragStart(event, '${group.main.name}')"
+                                     style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:grab;">
+                                    <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain; pointer-events: none;">
+                                    <span>${group.main.name}</span>
+                                </div>
+                             `;
+                        } else {
+                             container.innerHTML += `<div class="file-debug-slot" style="flex:1; opacity:0.5; text-align:center;">No Main</div>`;
+                        }
+
+                        // Arrow (Right)
+                        container.innerHTML += `<div style="color:#666; font-size:14px;">➡️</div>`;
+
+                        // Thumb Slot
+                        if (group.thumb) {
+                            const thumbId = `thumb-${id}`;
+                            const thumbName = group.thumb.name; // e.g., thumb_1.png
+                            
+                            // Draggable Thumb Container
+                            container.innerHTML += `
+                                <div class="file-debug-slot" title="${thumbName}" 
+                                     draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : thumbName}')"
+                                     style="flex:1; display:flex; flex-direction:column; align-items:center; position:relative;">
+                                    <img src="${group.thumb.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
+                                    <span>${thumbName}</span>
+                                    
+                                    <!-- Controls -->
+                                    <div style="margin-top:5px; display:flex; gap:5px;">
+                                        <button onclick="renameFile('${thumbName}')" title="Đổi tên" style="cursor:pointer; border:none; background:#f39c12; color:white; border-radius:3px; padding:2px 5px;">✏️</button>
+                                        <button onclick="deleteFile('${thumbName}')" title="Xóa" style="cursor:pointer; border:none; background:#c0392b; color:white; border-radius:3px; padding:2px 5px;">🗑️</button>
+                                    </div>
+                                </div>
+                             `;
+                        } else {
+                            // Missing Thumb -> Create Button AND Drop Zone
+                            const targetName = `thumb_${id}.png`;
+                            
+                            // Drop Zone Container
+                            container.innerHTML += `
+                                <div class="file-debug-slot" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; height:80px; border: 2px dashed #444;"
+                                     ondragover="handleDragOver(event)" 
+                                     ondrop="handleDrop(event, '${targetName}')">
+                                     
+                                    <button onclick="createThumbnail('${group.main ? group.main.name : ''}', '${targetName}')" 
+                                            style="background: #27ae60; border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                        + Tạo Thumb
+                                    </button>
+                                    <span style="color:#e67e22; font-size:10px; margin-top:5px;">Kéo thả ảnh vào đây</span>
+                                </div>
+                            `;
+                            
+                            // Prevent click propagation for the button in the container
+                             const lastDiv = container.lastElementChild;
+                             lastDiv.addEventListener('click', (e) => {
+                                  if(e.target.tagName !== 'BUTTON') return;
+                            });
+                        }
+                        
+                        mainList.appendChild(container);
+                    });
+
+                    // Render Others (Append to Main List, NOT grid)
+                    others.forEach(file => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'file-debug-item';
+                        itemDiv.style.cssText = 'background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center;';
+                        itemDiv.innerHTML = `
+                            <img src="${file.url}?v=${timestamp}" style="width: 100%; height: 100px; object-fit: contain;">
+                            <span>${file.name}</span>
+                        `;
+                        mainList.appendChild(itemDiv);
+                    });
+
+                } else {
+                    subtitle.textContent = `Lỗi: ${result.message}`;
+                }
+            } catch (error) {
+                console.error(error);
+                subtitle.textContent = "Lỗi kết nối server";
+            }
+        }
+
+
+
+        async function createThumbnail(sourceName, targetName) {
+            if(!confirm(`Tạo thumbnail ${targetName} từ ${sourceName}?`)) return;
+            
+            showLoading('Đang tạo thumbnail...');
+            try {
+                 // Get params again
+                 const activeColorBtn = document.querySelector('.color-btn.active');
+                 let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+                 const activeColorOption = document.querySelector('.color-option.active');
+                 if (activeColorOption) {
+                    colorParam = activeColorOption.dataset.colorFolder;
+                 }
+
+                 const response = await fetch('/api/create_thumb', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder,
+                        source_file: sourceName,
+                        target_file: targetName,
+                        color: colorParam
+                    })
+                });
+                
+                const result = await response.json();
+                if (result.success) {
+                    // alert('Tạo thành công!'); // No alert for speed
+                    showFolderFiles(); // Refresh
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch(e) {
+                alert('Lỗi server: ' + e);
+            } finally {
+                hideLoading();
+            }
+        }
+
+        async function deleteFile(filename) {
+            if(!confirm(`Bạn chắc chắn muốn XÓA file ${filename}?`)) return;
+            
+            showLoading('Đang xóa...');
+            try {
+                 const activeColorBtn = document.querySelector('.color-btn.active');
+                 let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+                 const activeColorOption = document.querySelector('.color-option.active');
+                 if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+
+                 const response = await fetch('/api/delete_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder,
+                        filename: filename,
+                        color: colorParam
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showFolderFiles();
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch(e) { alert('Lỗi: ' + e); }
+            finally { hideLoading(); }
+        }
+
+        async function renameFile(oldName) {
+            const newName = prompt(`Đổi tên ${oldName} thành:`, oldName);
+            if (!newName || newName === oldName) return;
+
+            showLoading('Đang đổi tên...');
+            try {
+                 const activeColorBtn = document.querySelector('.color-btn.active');
+                 let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+                 const activeColorOption = document.querySelector('.color-option.active');
+                 if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+
+                 const response = await fetch('/api/rename_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        folder: currentPart.part.folder,
+                        old_name: oldName,
+                        new_name: newName,
+                        color: colorParam
+                    })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showFolderFiles();
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch(e) { alert('Lỗi: ' + e); }
+            finally { hideLoading(); }
+        }
+
+        // Drag & Drop Handlers
+        function handleDragStart(e, filename) {
+            e.dataTransfer.setData('source_file', filename);
+            e.dataTransfer.effectAllowed = 'copy';
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+            e.currentTarget.style.borderColor = '#27ae60';
+            e.currentTarget.style.backgroundColor = 'rgba(39, 174, 96, 0.1)';
+        }
+
+        async function handleDrop(e, targetName) {
+             e.preventDefault();
+             e.currentTarget.style.borderColor = '#444';
+             e.currentTarget.style.backgroundColor = 'transparent';
+             
+             const sourceName = e.dataTransfer.getData('source_file');
+             if (!sourceName) return;
+
+             // Call Create/Copy logic
+             createThumbnail(sourceName, targetName);
+        }
+
         // Global Loading Functions
         function showLoading(message = 'Đang xử lý...') {
             document.getElementById('global-loading-message').textContent = message;
@@ -1545,6 +1915,27 @@
             </div>
         </div>
     </div>
+    <!-- File Debug Modal -->
+    <div id="file-debug-modal" class="modal-overlay" style="display: none; align-items: flex-start; padding-top: 50px;">
+         
+        <div class="modal-content" style="width: 95%;  max-height: 90vh; overflow-y: auto;">
+              <div style="display: flex; justify-content: flex-end; margin-bottom: 20px;">
+                 <button onclick="document.getElementById('file-debug-modal').style.display='none'" 
+                        style="padding: 10px 20px; background: #555; border: none; color: white; border-radius: 4px; cursor: pointer;">
+                    Đóng
+                </button>
+              </div>
+            <h3>Danh sách file trong folder</h3>
+            <p id="file-debug-subtitle" style="color: #888; margin-bottom: 20px;">Đang tải...</p>
+            
+            <div id="file-debug-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 15px;">
+                <!-- Files will be populated here -->
+            </div>
+
+           
+        </div>
+    </div>
+
     <!-- Global Loading Overlay -->
     <div id="global-loading-overlay">
         <div class="spinner"></div>
