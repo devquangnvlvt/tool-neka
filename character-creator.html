@@ -604,6 +604,8 @@
         let currentColorIndex = 0;
         let characterLayers = {};
         let imgVers = Date.now();
+        let canvasWidth = 1436;
+        let canvasHeight = 1902;
 
         // Canvas
         const canvas = document.getElementById('character-canvas');
@@ -677,6 +679,15 @@
                 const result = await response.json();
                 if (result.success) {
                     kitStructure = result.parts;
+                    canvasWidth = result.canvas_width || 1436;
+                    canvasHeight = result.canvas_height || 1902;
+
+                    // Update main canvas aspect ratio (Base width 400px)
+                    const displayWidth = 400;
+                    const aspectRatio = canvasHeight / canvasWidth;
+                    canvas.width = displayWidth;
+                    canvas.height = displayWidth * aspectRatio;
+                    canvas.style.height = (displayWidth * aspectRatio) + "px";
 
                     // Warning about duplicate X and gaps
                     const warningBox = document.getElementById('structure-warnings');
@@ -1983,6 +1994,8 @@
                 mergeCanvas = document.getElementById('merge-preview-canvas');
                 mctx = mergeCanvas.getContext('2d');
             }
+            mergeCanvas.width = canvasWidth;
+            mergeCanvas.height = canvasHeight;
 
             // Clear previous state
             mergeStack = [];
@@ -2207,16 +2220,30 @@
                             // Put modified image data back
                             tempCtx.putImageData(imageData, 0, 0);
                             
-                            // Draw tinted image to main canvas (centered)
-                            const x = (mergeCanvas.width - tempCanvas.width) / 2;
-                            const y = (mergeCanvas.height - tempCanvas.height) / 2;
-                            mctx.drawImage(tempCanvas, x, y);
-                        } else {
-                            // No color adjustment, draw normally (centered)
-                            const x = (mergeCanvas.width - img.naturalWidth) / 2;
-                            const y = (mergeCanvas.height - img.naturalHeight) / 2;
-                            mctx.drawImage(img, x, y);
+                        // Use coordinate offsets if available
+                        let targetX = (file.x !== undefined) ? file.x : (mergeCanvas.width - (tempCanvas.width)) / 2;
+                        let targetY = (file.y !== undefined) ? file.y : (mergeCanvas.height - (tempCanvas.height)) / 2;
+
+                        // SPECIAL FIX: Nếu ảnh đã là Full Canvas, x/y nên là 0
+                        if (img.naturalWidth === canvasWidth && img.naturalHeight === canvasHeight) {
+                            targetX = 0;
+                            targetY = 0;
                         }
+
+                        mctx.drawImage(tempCanvas, targetX, targetY);
+                    } else {
+                        // No color adjustment, draw normally
+                        let targetX = (file.x !== undefined) ? file.x : (mergeCanvas.width - img.naturalWidth) / 2;
+                        let targetY = (file.y !== undefined) ? file.y : (mergeCanvas.height - img.naturalHeight) / 2;
+                        
+                        // SPECIAL FIX: Nếu ảnh đã là Full Canvas, x/y nên là 0
+                        if (img.naturalWidth === canvasWidth && img.naturalHeight === canvasHeight) {
+                            targetX = 0;
+                            targetY = 0;
+                        }
+
+                        mctx.drawImage(img, targetX, targetY);
+                    }
                         
                         resolve();
                     };
@@ -2266,6 +2293,12 @@
                         folder: currentPart.part.folder,
                         color: currentColor || 'default',
                         selected_files: mergeStack.map(f => typeof f === 'string' ? f : f.filename),
+                        offsets: mergeStack.reduce((acc, f) => {
+                            if (typeof f !== 'string' && f.x !== undefined) {
+                                acc[f.filename] = { x: f.x, y: f.y };
+                            }
+                            return acc;
+                        }, {}),
                         destination_name: destName,
                         bulk_apply: bulkApply,
                         layer_adjustments: layerColorAdjustments

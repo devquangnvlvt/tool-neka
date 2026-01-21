@@ -241,6 +241,30 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
             parts.sort(key=lambda p: p['y'])
             
+            # --- Get Global Canvas Dimensions ---
+            canvas_width, canvas_height = 1436, 1902 # Defaults
+            try:
+                meta_path = os.path.join(kit_path, "metadata.json")
+                if os.path.exists(meta_path):
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                        parts_data = meta.get('data', {}).get('parts', [])
+                        if parts_data:
+                            # Tìm item đầu tiên có crop data để lấy kích thước canvas gốc
+                            for p_item in parts_data:
+                                p_items = p_item.get('items', [])
+                                if p_items and p_items[0]:
+                                    f_layer = p_items[0]
+                                    if isinstance(f_layer, list): f_layer = f_layer[0]
+                                    if isinstance(f_layer, dict) and 'crop' in f_layer:
+                                        c = f_layer['crop']
+                                        canvas_width = c.get('ow', canvas_width)
+                                        canvas_height = c.get('oh', canvas_height)
+                                        break
+            except Exception as e:
+                print(f"Error detecting canvas size: {e}")
+            
+            
             # --- Check X-Y Continuity ---
             found_x = set()
             found_y = set()
@@ -272,7 +296,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 "separated_folders": separated_folders,
                 "duplicates": duplicate_warnings,
                 "missing_x": missing_x,
-                "missing_y": missing_y
+                "missing_y": missing_y,
+                "canvas_width": canvas_width,
+                "canvas_height": canvas_height
             })
             self.wfile.write(response.encode('utf-8'))
         except Exception as e:
@@ -714,27 +740,46 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
             print(f"[Merge] Stacking {selected_files} into {dest_name}.png in {folder_name}")
 
-            # Load metadata for offsets
-            offsets = {} 
+            # Load metadata for offsets and canvas size
+            canvas_width, canvas_height = 1436, 1902 # Defaults
+            offsets = data.get('offsets', {}) # Prioritize offsets from frontend
+            local_offsets = {}
             try:
-                match = re.search(r"-(\d+)$", folder_name)
-                if match:
-                    part_idx = int(match.group(1)) - 1
-                    meta_path = os.path.join(kit_path, "metadata.json")
-                    if os.path.exists(meta_path):
-                        with open(meta_path, 'r', encoding='utf-8') as f:
-                            meta = json.load(f)
-                            parts = meta.get('data', {}).get('parts', [])
-                            if 0 <= part_idx < len(parts):
-                                items = parts[part_idx].get('items', [])
+                meta_path = os.path.join(kit_path, "metadata.json")
+                if os.path.exists(meta_path):
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta = json.load(f)
+                        # Detect canvas size from metadata
+                        parts_data = meta.get('data', {}).get('parts', [])
+                        for p_item in parts_data:
+                            p_items = p_item.get('items', [])
+                            if p_items and p_items[0]:
+                                f_layer = p_items[0]
+                                if isinstance(f_layer, list): f_layer = f_layer[0]
+                                if isinstance(f_layer, dict) and 'crop' in f_layer:
+                                    c = f_layer['crop']
+                                    canvas_width = c.get('ow', canvas_width)
+                                    canvas_height = c.get('oh', canvas_height)
+                                    break
+
+                        match = re.search(r"-(\d+)$", folder_name)
+                        if match:
+                            part_idx = int(match.group(1)) - 1
+                            if 0 <= part_idx < len(parts_data):
+                                items = parts_data[part_idx].get('items', [])
                                 for idx, item_layers in enumerate(items):
                                    if not isinstance(item_layers, list): item_layers = [item_layers]
                                    if not item_layers: continue
                                    first_layer = item_layers[0]
                                    crop = first_layer.get('crop', {})
-                                   offsets[f"{idx + 1}.png"] = {"x": crop.get('x', 0), "y": crop.get('y', 0)}
+                                   local_offsets[f"{idx + 1}.png"] = {"x": crop.get('x', 0), "y": crop.get('y', 0)}
             except Exception as e:
                 print(f"[Merge] Metadata error: {e}")
+            
+            # Merge: Frontend offsets win, then local detected ones
+            for k, v in local_offsets.items():
+                if k not in offsets:
+                    offsets[k] = v
 
             def apply_color_transform(img, target_color=None, saturation=1.0, brightness=1.0):
                 """Apply color tint to an image - replaces all colors with target color while preserving luminosity"""
@@ -794,7 +839,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             def perform_merge(src, target_fn, files_to_stack, is_default_color=False, layer_adjustments=None):
                 if not os.path.exists(src): return False
                 
-                ow, oh = 1436, 1902
+                ow, oh = canvas_width, canvas_height
                 for fn in files_to_stack:
                     p = os.path.join(src, fn)
                     if os.path.exists(p):
