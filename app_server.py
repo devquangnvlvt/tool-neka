@@ -44,6 +44,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
     def send_api_response(self, success, message, extra=None):
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
+        self.send_header('X-Frame-Options', 'DENY')
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
         self.end_headers()
         res = {"success": success, "message": sanitize_error(message)}
         if extra: res.update(extra)
@@ -1149,11 +1152,11 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
-            struct_base = os.path.join(kit_path, "items_structured", part_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
+            struct_base = safe_join(kit_path, "items_structured", part_folder)
             
-            old_path = os.path.join(struct_base, old_color)
-            new_path = os.path.join(struct_base, new_color)
+            old_path = safe_join(struct_base, old_color)
+            new_path = safe_join(struct_base, new_color)
 
             if not os.path.exists(old_path):
                 self.send_api_response(False, "Old color folder not found")
@@ -1184,15 +1187,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Target structured folder
-            struct_base = os.path.join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, "items_structured", folder_name)
             
             # Target directory logic
             target_dir = struct_base
             if color and color != 'default' and filename != 'nav.png':
-                 target_dir = os.path.join(struct_base, color)
+                 target_dir = safe_join(struct_base, color)
                  if not os.path.exists(target_dir):
                      os.makedirs(target_dir)
 
@@ -1200,7 +1203,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_api_response(False, "Folder not found")
                 return
 
-            file_path = os.path.join(target_dir, filename)
+            # Security Check: Ensure filename doesn't contain traversal characters
+            if '/' in filename or '\\' in filename or filename == '..':
+                self.send_api_response(False, "Invalid filename")
+                return
+
+            file_path = safe_join(target_dir, filename)
 
             # Decode base64
             if ',' in file_content:
