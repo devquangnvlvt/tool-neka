@@ -10,13 +10,53 @@ from urllib.parse import urlparse, parse_qs
 
 PORT = 8000
 
+# ================= SECURITY UTILITIES =================
+def safe_join(base, *paths):
+    """
+    Safely joins paths and ensures the result is within the base directory.
+    Prevents Path Traversal attacks.
+    """
+    base = os.path.abspath(base)
+    # Filter out empty or None paths
+    clean_paths = [p for p in paths if p and isinstance(p, str)]
+    if not clean_paths:
+        return base
+    joined = os.path.abspath(os.path.join(base, *clean_paths))
+    if not joined.startswith(base):
+        raise ValueError("Security violation: Path traversal detected")
+    return joined
+
+def sanitize_error(message):
+    """Removes sensitive system paths from error messages."""
+    if not message: return ""
+    # Replace absolute project root with a generic label
+    root = os.path.dirname(os.path.abspath(__file__))
+    return message.replace(root, "[PROJECT_ROOT]").replace("\\", "/")
+
+def validate_id(id_str):
+    """Validates that a kit or folder name is safe."""
+    if not id_str: return False
+    return bool(re.match(r"^[a-zA-Z0-9_\-\.]+$", str(id_str)))
+
+# ======================================================
+
 class KitHandler(http.server.SimpleHTTPRequestHandler):
+    def send_api_response(self, success, message, extra=None):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        res = {"success": success, "message": sanitize_error(message)}
+        if extra: res.update(extra)
+        self.wfile.write(json.dumps(res).encode('utf-8'))
     def do_GET(self):
         parsed_path = urlparse(self.path)
         if parsed_path.path == '/api/zip_kit':
             query = parse_qs(parsed_path.query)
             kit_folder = query.get('kit', [None])[0]
             if kit_folder:
+                if not validate_id(kit_folder):
+                    self.send_api_response(False, "Invalid kit name")
+                    return
                 self.handle_zip_kit({"kit": kit_folder})
             else:
                 self.send_api_response(False, "Missing kit parameter")
@@ -31,45 +71,51 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_api_response(False, "Missing kit or folder params")
             return
+        
+        # Security: Prevent listing directories via GET
+        if parsed_path.path.endswith('/') and parsed_path.path != '/':
+             self.send_error(403, "Directory listing forbidden")
+             return
+
         return super().do_GET()
 
     def do_POST(self):
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        data = json.loads(post_data.decode('utf-8'))
+        try:
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            data = json.loads(post_data.decode('utf-8'))
+        except:
+            self.send_api_response(False, "Invalid JSON data")
+            return
 
-        if self.path == '/api/delete_part':
-            self.handle_delete_part(data)
-        elif self.path == '/api/zip_kit':
-            self.handle_zip_kit(data)
-        elif self.path == '/api/rename_folder':
-            self.handle_rename_folder(data)
-        elif self.path == '/api/get_item_layers':
-            self.handle_get_item_layers(data)
-        elif self.path == '/api/create_thumb':
-            self.handle_create_thumb(data)
-        elif self.path == '/api/delete_file':
-            self.handle_delete_file(data)
-        elif self.path == '/api/rename_file':
-            self.handle_rename_file(data)
-        elif self.path == '/api/merge_layers':
-            self.handle_merge_layers(data)
-        elif self.path == '/api/get_kit_structure':
-            self.handle_get_kit_structure(data)
-        elif self.path == '/api/get_kits_list':
-            self.handle_get_kits_list(data)
-        elif self.path == '/api/flatten_colors':
-            self.handle_flatten_colors(data)
-        elif self.path == '/api/list_part_images':
-            self.handle_list_part_images(data)
-        elif self.path == '/api/rename_folder':
-            self.handle_rename_folder(data)
-        elif self.path == '/api/get_item_layers':
-            self.handle_get_item_layers(data)
-        elif self.path == '/api/upload_file':
-            self.handle_upload_file(data)
-        elif self.path == '/api/rename_color_folder':
-            self.handle_rename_color_folder(data)
+        # Map endpoints to handlers
+        endpoints = {
+            '/api/delete_part': self.handle_delete_part,
+            '/api/zip_kit': self.handle_zip_kit,
+            '/api/rename_folder': self.handle_rename_folder,
+            '/api/get_item_layers': self.handle_get_item_layers,
+            '/api/create_thumb': self.handle_create_thumb,
+            '/api/delete_file': self.handle_delete_file,
+            '/api/rename_file': self.handle_rename_file,
+            '/api/merge_layers': self.handle_merge_layers,
+            '/api/get_kit_structure': self.handle_get_kit_structure,
+            '/api/get_kits_list': self.handle_get_kits_list,
+            '/api/flatten_colors': self.handle_flatten_colors,
+            '/api/list_part_images': self.handle_list_part_images,
+            '/api/rename_folder': self.handle_rename_folder,
+            '/api/get_item_layers': self.handle_get_item_layers,
+            '/api/upload_file': self.handle_upload_file,
+            '/api/rename_color_folder': self.handle_rename_color_folder,
+        }
+
+        handler = endpoints.get(self.path)
+        if handler:
+            try:
+                handler(data)
+            except ValueError as ve:
+                self.send_api_response(False, str(ve))
+            except Exception as e:
+                self.send_api_response(False, f"Internal Error: {str(e)}")
         else:
             self.send_error(404, "Unknown API endpoint")
 
@@ -107,10 +153,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
-            structured_dir = os.path.join(kit_path, "items_structured")
+            kit_path = safe_join(base_path, "downloads", kit_folder)
+            structured_dir = safe_join(kit_path, "items_structured")
             if not os.path.exists(structured_dir):
-                self.send_api_response(False, f"Directory not found: {structured_dir}")
+                self.send_api_response(False, "Kit structure not found")
                 return
             separated_folders = []
             sep_layers_path = os.path.join(kit_path, "separated_layers.json")
@@ -249,13 +295,13 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
             
-            struct_base = os.path.join(kit_path, "items_structured")
-            merged_base = os.path.join(kit_path, "items_merged")
+            struct_base = safe_join(kit_path, "items_structured")
+            merged_base = safe_join(kit_path, "items_merged")
             
-            old_path = os.path.join(struct_base, old_name)
-            new_path = os.path.join(struct_base, new_name)
+            old_path = safe_join(struct_base, old_name)
+            new_path = safe_join(struct_base, new_name)
 
             if not os.path.exists(old_path):
                 self.send_api_response(False, "Folder not found")
@@ -333,7 +379,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Get part index from folder name
             match = re.search(r"-(\d+)$", folder_name)
@@ -439,15 +485,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Target structured folder
-            struct_base = os.path.join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, "items_structured", folder_name)
             
             target_dir = struct_base
             is_subcolor = False
             if color and color != 'default':
-                target_dir = os.path.join(struct_base, color)
+                target_dir = safe_join(struct_base, color)
                 is_subcolor = True
 
             if not os.path.exists(target_dir):
@@ -529,40 +575,32 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             from PIL import Image
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Determine directory
-            struct_base = os.path.join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, "items_structured", folder_name)
             target_dir = struct_base
             if color and color != 'default':
-                target_dir = os.path.join(struct_base, color)
+                target_dir = safe_join(struct_base, color)
             
             # Construct paths
-            # Note: source_file sent from frontend is just the filename in the current view
-            # But wait, if we are in a subcolor, the source might be in Parent (nav.png) or Current (1.png)
-            # The frontend should probably send the logic location or we try to find it.
-            
-            source_path = os.path.join(target_dir, source_file)
+            source_path = safe_join(target_dir, source_file)
             
             # If not found in target_dir (subcolor), check parent
             if not os.path.exists(source_path) and color and color != 'default':
-                 source_path = os.path.join(struct_base, source_file)
+                 source_path = safe_join(struct_base, source_file)
 
             if not os.path.exists(source_path):
-                self.send_api_response(False, f"Source file not found: {source_file}")
+                self.send_api_response(False, "Source file not found")
                 return
             
-            target_path = os.path.join(struct_base, target_file)
+            target_path = safe_join(struct_base, target_file)
             
             with Image.open(source_path) as img:
                 img.thumbnail((200, 200))
                 img.save(target_path)
             
             self.send_api_response(True, f"Created {target_file}")
-
-        except Exception as e:
-             self.send_api_response(False, f"Error creating thumbnail: {str(e)}")
-
 
         except Exception as e:
              self.send_api_response(False, f"Error creating thumbnail: {str(e)}")
@@ -579,27 +617,19 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            # Determine directory
-            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
-            if color and color != 'default':
-                # Check if file is in color folder or parent
-                # Security: Prevent escaping
-                pass
-            
-            # Since we have logic for Parent/Current location in frontend, we should probably rely on exact path resolution
-            # But "Parent" files (nav.png) might be shared. Deleting them affects all. 
-            # For this simple tool, let's assume we delete from the resolved path.
+            kit_path = safe_join(base_path, "downloads", kit_folder)
+            struct_base = safe_join(kit_path, "items_structured", folder_name)
             
             # Simple resolution:
-            path_primary = os.path.join(target_dir, color if color and color != 'default' else "", filename)
-            path_parent = os.path.join(target_dir, filename)
+            path_primary = safe_join(struct_base, color if color and color != 'default' else "", filename)
+            path_parent = safe_join(struct_base, filename)
 
             target_path = path_primary
             if not os.path.exists(target_path) and os.path.exists(path_parent):
                 target_path = path_parent
-            
+
             if not os.path.exists(target_path):
-                self.send_api_response(False, f"File not found: {filename}")
+                self.send_api_response(False, "File not found")
                 return
 
             os.remove(target_path)
@@ -621,25 +651,26 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
+            struct_base = safe_join(kit_path, "items_structured", folder_name)
             
             # Path Logic
-            path_primary = os.path.join(target_dir, color if color and color != 'default' else "", old_name)
-            path_parent = os.path.join(target_dir, old_name)
+            path_primary = safe_join(struct_base, color if color and color != 'default' else "", old_name)
+            path_parent = safe_join(struct_base, old_name)
             
             current_path = path_primary
             if not os.path.exists(current_path) and os.path.exists(path_parent):
                 current_path = path_parent
                 
             if not os.path.exists(current_path):
-                self.send_api_response(False, f"File not found: {old_name}")
+                self.send_api_response(False, "File not found")
                 return
                 
             # New path must be in the SAME directory as the old one
-            new_path = os.path.join(os.path.dirname(current_path), new_name)
+            new_path = safe_join(os.path.dirname(current_path), new_name)
             
             if os.path.exists(new_path):
-                self.send_api_response(False, f"File already exists: {new_name}")
+                self.send_api_response(False, "Destination file already exists")
                 return
                 
             os.rename(current_path, new_path)
@@ -674,8 +705,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
-            structured_dir = os.path.join(kit_path, "items_structured", folder_name)
+            kit_path = safe_join(base_path, "downloads", kit_folder)
+            structured_dir = safe_join(kit_path, "items_structured", folder_name)
 
             if not os.path.exists(structured_dir):
                 self.send_api_response(False, "Folder not found")
@@ -1043,19 +1074,17 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         if not kit_folder:
             self.send_api_response(False, "Missing kit parameter")
             return
+        if not validate_id(kit_folder):
+            self.send_api_response(False, "Invalid kit name")
+            return
         try:
             from zip_neka_kit import zip_kit
             zip_path = zip_kit(kit_folder)
-            if os.path.exists(zip_path):
-                self.send_response(200)
-                self.send_header('Content-Type', 'application/zip')
-                self.send_header('Content-Disposition', f'attachment; filename="{os.path.basename(zip_path)}"')
-                self.send_header('Content-Length', str(os.path.getsize(zip_path)))
-                self.end_headers()
-                with open(zip_path, 'rb') as f:
-                    self.wfile.write(f.read())
-            else:
-                self.send_api_response(False, "Failed to create ZIP file")
+            # Ensure zip_path is within project
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            if not os.path.abspath(zip_path).startswith(base_path):
+                 self.send_api_response(False, "Invalid zip archive path")
+                 return
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
