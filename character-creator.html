@@ -196,10 +196,10 @@
             bottom: 0;
             left: 0;
             right: 0;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.5);
             color: white;
             font-size: 10px;
-            padding: 2px;
+            padding: 0.75px;
             text-align: center;
         }
 
@@ -540,7 +540,8 @@
             <div class="canvas-area">
                 <canvas id="character-canvas" width="400" height="400"></canvas>
                 <div class="controls">
-                    <button class="btn btn-secondary" onclick="randomizeCharacter()">🎲 Random</button>
+                    <button class="btn btn-secondary" onclick="randomizeCharacter()">Random</button>
+                    <button class="btn btn-secondary" onclick="resetAllLayers()" style="background: #e74c3c;">Reset</button>
                 </div>
                 <div id="structure-warnings" style="display: none; padding: 10px; background: #fff3e0; border: 1px solid #ffe0b2; color: #e65100; border-radius: 5px; margin-bottom: 10px; font-size: 13px;"></div>
                 <div id="separated-layers-info" style="display: none; padding: 15px; background: #e3f2fd; border: 1px solid #bbdefb; border-radius: 12px; margin-top: 10px; width: 100%; text-align: left;">
@@ -872,8 +873,9 @@
                 flattenBtn.style.display = 'none';
             }
 
-            // Reset item to 1 for new part
-            currentItem = 1;
+            // Don't auto-select item - respect current selection or None
+            // If this part has a layer, it will be restored by loadItems
+            currentItem = characterLayers[index] ? characterLayers[index].itemNumber : null;
 
             // Load items
             loadItems(part);
@@ -1252,6 +1254,20 @@
             if (currentPart) {
                 selectPart(currentPart.index, currentPart.part);
             }
+        }
+
+        // Reset all layers (select None for all parts)
+        function resetAllLayers() {
+            characterLayers = {};
+            renderCharacter();
+            
+            // Update UI to show all parts as "None" selected
+            document.querySelectorAll('.item-option').forEach(item => {
+                item.classList.remove('active');
+            });
+            document.querySelectorAll('.item-none').forEach(none => {
+                none.classList.add('active');
+            });
         }
 
         async function downloadZip() {
@@ -2027,6 +2043,10 @@
             redrawMergePreview();
         }
 
+        // Track color adjustments for each layer
+        let layerColorAdjustments = {}; // {filename: {hue_shift, saturation, brightness}}
+        let selectedLayerIndex = null;
+
         function renderStack() {
             const list = document.getElementById('merge-stack-list');
             list.innerHTML = '';
@@ -2039,14 +2059,95 @@
                 
                 const item = document.createElement('div');
                 item.className = 'stack-item';
+                if (selectedLayerIndex === idx) {
+                    item.style.background = 'rgba(52, 152, 219, 0.3)';
+                    item.style.border = '2px solid #3498db';
+                }
+                item.style.cursor = 'pointer';
+                
                 item.innerHTML = `
                     <span style="font-weight:bold; color:#666;">#${idx+1}</span>
                     <img src="${baseUrl}${filename}?v=${imgVers}">
                     <span style="flex:1; font-size:12px;">${filename}</span>
-                    <button class="btn" style="padding:2px 5px; background:#ff7675; color:white;" onclick="removeFromStack(${idx})">✖</button>
+                    <button class="btn" style="padding:2px 5px; background:#ff7675; color:white;" onclick="event.stopPropagation(); removeFromStack(${idx})">✖</button>
                 `;
+                
+                // Click to select layer for color adjustment
+                item.onclick = () => selectLayerForAdjustment(idx, filename);
+                
                 list.appendChild(item);
             });
+        }
+
+        function selectLayerForAdjustment(idx, filename) {
+            selectedLayerIndex = idx;
+            renderStack(); // Re-render to show selection
+            
+            // Show color adjustment panel
+            const panel = document.getElementById('color-adjust-panel');
+            panel.style.display = 'block';
+            document.getElementById('selected-layer-name').textContent = filename;
+            
+            // Load existing adjustments or defaults
+            const adj = layerColorAdjustments[filename] || {target_color: null};
+            
+            if (adj.target_color) {
+                document.getElementById('color-picker').value = '#' + adj.target_color;
+                document.getElementById('color-value').textContent = '#' + adj.target_color.toUpperCase();
+            } else {
+                document.getElementById('color-picker').value = '#FFFFFF';
+                document.getElementById('color-value').textContent = 'Không đổi';
+            }
+        }
+
+        function updateColorAdjustment() {
+            if (selectedLayerIndex === null) return;
+            
+            const filename = mergeStack[selectedLayerIndex];
+            const filenameStr = typeof filename === 'string' ? filename : filename.filename;
+            
+            const colorHex = document.getElementById('color-picker').value.replace('#', '');
+            
+            document.getElementById('color-value').textContent = '#' + colorHex.toUpperCase();
+            
+            layerColorAdjustments[filenameStr] = {
+                target_color: colorHex.toUpperCase(),
+                saturation: 1.0,
+                brightness: 1.0
+            };
+            
+            // Redraw preview with new color
+            redrawMergePreview();
+        }
+
+        function clearColorTint() {
+            if (selectedLayerIndex === null) return;
+            
+            const filename = mergeStack[selectedLayerIndex];
+            const filenameStr = typeof filename === 'string' ? filename : filename.filename;
+            
+            document.getElementById('color-picker').value = '#FFFFFF';
+            document.getElementById('color-value').textContent = 'Không đổi';
+            
+            if (layerColorAdjustments[filenameStr]) {
+                layerColorAdjustments[filenameStr].target_color = null;
+            }
+            
+            redrawMergePreview();
+        }
+
+        function resetColorAdjustment() {
+            if (selectedLayerIndex === null) return;
+            
+            const filename = mergeStack[selectedLayerIndex];
+            const filenameStr = typeof filename === 'string' ? filename : filename.filename;
+            
+            document.getElementById('color-picker').value = '#FFFFFF';
+            document.getElementById('color-value').textContent = 'Không đổi';
+            
+            delete layerColorAdjustments[filenameStr];
+            
+            redrawMergePreview();
         }
 
         async function redrawMergePreview() {
@@ -2059,14 +2160,64 @@
                 const filename = typeof file === 'string' ? file : file.filename;
                 
                 const img = new Image();
+                img.crossOrigin = 'anonymous'; // Enable CORS
                 img.src = `${baseUrl}${filename}?v=${imgVers}`;
                 await new Promise(resolve => {
                     img.onload = () => {
-                        // FORCE CENTER as per user request (ignore metadata offsets)
-                        // This ensures user sees the item in the middle of the preview
-                        const x = (mergeCanvas.width - img.naturalWidth) / 2;
-                        const y = (mergeCanvas.height - img.naturalHeight) / 2;
-                        mctx.drawImage(img, x, y);
+                        // Check if this layer has color adjustments
+                        const adj = layerColorAdjustments[filename];
+                        
+                        if (adj && adj.target_color) {
+                            // Apply color tint using temporary canvas
+                            const tempCanvas = document.createElement('canvas');
+                            tempCanvas.width = img.naturalWidth;
+                            tempCanvas.height = img.naturalHeight;
+                            const tempCtx = tempCanvas.getContext('2d');
+                            
+                            // Draw original image
+                            tempCtx.drawImage(img, 0, 0);
+                            
+                            // Get image data
+                            const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+                            const data = imageData.data;
+                            
+                            // Parse target color
+                            const targetColor = adj.target_color;
+                            const r_target = parseInt(targetColor.substring(0, 2), 16);
+                            const g_target = parseInt(targetColor.substring(2, 4), 16);
+                            const b_target = parseInt(targetColor.substring(4, 6), 16);
+                            
+                            // Apply color tint
+                            for (let i = 0; i < data.length; i += 4) {
+                                const r = data[i];
+                                const g = data[i + 1];
+                                const b = data[i + 2];
+                                // const a = data[i + 3]; // Keep alpha unchanged
+                                
+                                // Convert to grayscale (luminosity)
+                                const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+                                const intensity = gray / 255;
+                                
+                                // Apply target color scaled by intensity
+                                data[i] = r_target * intensity;
+                                data[i + 1] = g_target * intensity;
+                                data[i + 2] = b_target * intensity;
+                            }
+                            
+                            // Put modified image data back
+                            tempCtx.putImageData(imageData, 0, 0);
+                            
+                            // Draw tinted image to main canvas (centered)
+                            const x = (mergeCanvas.width - tempCanvas.width) / 2;
+                            const y = (mergeCanvas.height - tempCanvas.height) / 2;
+                            mctx.drawImage(tempCanvas, x, y);
+                        } else {
+                            // No color adjustment, draw normally (centered)
+                            const x = (mergeCanvas.width - img.naturalWidth) / 2;
+                            const y = (mergeCanvas.height - img.naturalHeight) / 2;
+                            mctx.drawImage(img, x, y);
+                        }
+                        
                         resolve();
                     };
                     img.onerror = resolve;
@@ -2114,12 +2265,10 @@
                         kit: CURRENT_KIT_FOLDER,
                         folder: currentPart.part.folder,
                         color: currentColor || 'default',
-                        kit: CURRENT_KIT_FOLDER,
-                        folder: currentPart.part.folder,
-                        color: currentColor || 'default',
                         selected_files: mergeStack.map(f => typeof f === 'string' ? f : f.filename),
                         destination_name: destName,
-                        bulk_apply: bulkApply
+                        bulk_apply: bulkApply,
+                        layer_adjustments: layerColorAdjustments
                     })
                 });
                 const result = await response.json();
@@ -2167,6 +2316,22 @@
                     <h3>🛠️ Thứ tự ghép</h3>
                     <p style="font-size: 11px; color: #666; margin-bottom: 10px;">Ảnh bên dưới sẽ nằm đè lên ảnh bên trên.</p>
                     <div id="merge-stack-list" style="flex: 1; overflow-y: auto;"></div>
+                    
+                    <!-- Color Adjustment Panel -->
+                    <div id="color-adjust-panel" style="display: none; margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                        <h4 style="margin: 0 0 10px 0; font-size: 13px;">🎨 Điều chỉnh màu: <span id="selected-layer-name"></span></h4>
+                        
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size: 11px; color: #999;">Màu sắc: <span id="color-value">#FFFFFF</span></label>
+                            <div style="display: flex; gap: 10px; align-items: center;">
+                                <input type="color" id="color-picker" value="#FFFFFF" style="width: 60px; height: 30px; border: none; cursor: pointer;" oninput="updateColorAdjustment()">
+                                <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px;" onclick="clearColorTint()">✖ Xóa màu</button>
+                            </div>
+                        </div>
+                        
+                        <button class="btn btn-secondary" style="width: 100%; font-size: 11px;" onclick="resetColorAdjustment()">↺ Reset</button>
+                    </div>
+                    
                     <div style="margin-top: 15px;">
                         <button class="btn btn-secondary" style="width: 100%; margin-bottom: 5px;" onclick="shuffleStack()">🎲 Random</button>
                         <button class="btn btn-secondary" style="width: 100%; color: #ff7675;" onclick="clearStack()">🗑️ Xóa hết</button>

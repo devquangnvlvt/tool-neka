@@ -650,13 +650,23 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def handle_merge_layers(self, data):
-        from PIL import Image
+        from PIL import Image, ImageEnhance
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
         selected_files = data.get('selected_files', [])
         dest_name = data.get('destination_name', '1')
         color = data.get('color', 'default')
         bulk_apply = data.get('bulk_apply', False)
+        layer_adjustments_raw = data.get('layer_adjustments', {})  # {filename: {target_color, saturation, brightness}}
+
+        # Convert layer_adjustments to proper format
+        layer_adjustments = {}
+        for filename, adj in layer_adjustments_raw.items():
+            layer_adjustments[filename] = {
+                'target_color': adj.get('target_color'),  # Hex color string like "FF0000"
+                'saturation': float(adj.get('saturation', 1.0)),
+                'brightness': float(adj.get('brightness', 1.0))
+            }
 
         if not kit_folder or not folder_name or not selected_files:
             self.send_api_response(False, "Missing parameters (need kit, folder, selected_files)")
@@ -695,7 +705,62 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             except Exception as e:
                 print(f"[Merge] Metadata error: {e}")
 
-            def perform_merge(src, target_fn, files_to_stack, is_default_color=False):
+            def apply_color_transform(img, target_color=None, saturation=1.0, brightness=1.0):
+                """Apply color tint to an image - replaces all colors with target color while preserving luminosity"""
+                if img.mode != 'RGBA':
+                    img = img.convert('RGBA')
+                
+                r, g, b, a = img.split()
+                
+                # If target_color is provided, apply color overlay
+                if target_color:
+                    # Parse hex color (e.g., "FF0000" or "#FF0000")
+                    if isinstance(target_color, str):
+                        target_color = target_color.lstrip('#')
+                        if len(target_color) == 6:
+                            target_r = int(target_color[0:2], 16)
+                            target_g = int(target_color[2:4], 16)
+                            target_b = int(target_color[4:6], 16)
+                        else:
+                            # Invalid color, skip
+                            target_r, target_g, target_b = 255, 255, 255
+                    else:
+                        target_r, target_g, target_b = target_color
+                    
+                    # Convert to grayscale to get luminosity
+                    gray_img = Image.merge('RGB', (r, g, b)).convert('L')
+                    
+                    # Create colored version by applying target color with grayscale as intensity
+                    import numpy as np
+                    gray_array = np.array(gray_img).astype(float) / 255.0
+                    
+                    # Apply target color scaled by luminosity
+                    r_new = (gray_array * target_r).astype('uint8')
+                    g_new = (gray_array * target_g).astype('uint8')
+                    b_new = (gray_array * target_b).astype('uint8')
+                    
+                    rgb_img = Image.merge('RGB', (
+                        Image.fromarray(r_new),
+                        Image.fromarray(g_new),
+                        Image.fromarray(b_new)
+                    ))
+                else:
+                    rgb_img = Image.merge('RGB', (r, g, b))
+                
+                # Apply brightness and saturation
+                if brightness != 1.0:
+                    enhancer = ImageEnhance.Brightness(rgb_img)
+                    rgb_img = enhancer.enhance(brightness)
+                
+                if saturation != 1.0:
+                    enhancer = ImageEnhance.Color(rgb_img)
+                    rgb_img = enhancer.enhance(saturation)
+                
+                # Merge back with alpha
+                result = Image.merge('RGBA', (*rgb_img.split(), a))
+                return result
+
+            def perform_merge(src, target_fn, files_to_stack, is_default_color=False, layer_adjustments=None):
                 if not os.path.exists(src): return False
                 
                 ow, oh = 1436, 1902
@@ -713,6 +778,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     if os.path.exists(p):
                         try:
                             with Image.open(p) as l_img:
+                                # Apply color adjustments if provided
+                                if layer_adjustments and fn in layer_adjustments:
+                                    adj = layer_adjustments[fn]
+                                    target_col = adj.get('target_color')
+                                    sat = adj.get('saturation', 1.0)
+                                    bri = adj.get('brightness', 1.0)
+                                    if target_col or sat != 1.0 or bri != 1.0:
+                                        l_img = apply_color_transform(l_img, target_col, sat, bri)
+                                
                                 x, y = 0, 0
                                 if fn in offsets:
                                     w, h = l_img.size
@@ -771,17 +845,17 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             if color and color != 'default':
                 target_src = os.path.join(structured_dir, color)
             
-            if perform_merge(target_src, dest_name, selected_files, is_default_color=is_default):
+            if perform_merge(target_src, dest_name, selected_files, is_default_color=is_default, layer_adjustments=layer_adjustments):
                 total_count += 1
             
             if bulk_apply:
                 if not is_default:
-                    if perform_merge(structured_dir, dest_name, selected_files, is_default_color=True):
+                    if perform_merge(structured_dir, dest_name, selected_files, is_default_color=True, layer_adjustments=layer_adjustments):
                         total_count += 1
                 for d in os.listdir(structured_dir):
                     sub = os.path.join(structured_dir, d)
                     if os.path.isdir(sub) and (not color or d != color):
-                        if perform_merge(sub, dest_name, selected_files, is_default_color=False):
+                        if perform_merge(sub, dest_name, selected_files, is_default_color=False, layer_adjustments=layer_adjustments):
                             total_count += 1
             self.send_api_response(True, f"Đã ghép xong {total_count} thư mục và lưu thay thế vào {dest_name}.png")
 
