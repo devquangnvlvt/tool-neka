@@ -569,17 +569,19 @@
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                         <h3 id="current-part-name">Chọn một bộ phận</h3>
                         <div style="display: flex; gap: 5px;">
-                            <button id="layer-details-btn" class="btn" style="background: #7c3aed; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="showCurrentItemLayers()">📋 Chi tiết layer</button>
-                            <button id="merge-part-btn" class="btn" style="background: #00b894; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="mergeLayers()">🪄 Ghép layer</button>
-                            <button id="flatten-colors-btn" class="btn" style="background: #e67e22; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="flattenColors()">💨 Gộp folder</button>
-                            <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">🗑️ Xóa</button>
+                            <button id="layer-details-btn" class="btn" style="background: #7c3aed; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="showCurrentItemLayers()">Chi tiết layer</button>
+                            <button id="merge-part-btn" class="btn" style="background: #00b894; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="mergeLayers()">Ghép layer</button>
+                            <button id="flatten-colors-btn" class="btn" style="background: #e67e22; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="flattenColors()">Gộp folder</button>
+                            <button id="delete-part-btn" class="btn" style="background: #ff7675; color: white; padding: 5px 10px; font-size: 12px; display: none;" onclick="promptDeletePart()">Xóa</button>
                         </div>
                     </div>
                     <div class="item-grid" id="item-grid"></div>
                 </div>
 
                 <div class="color-selector">
-                    <h3>Chọn màu</h3>
+                  <div>
+                      <div id="edit-folder-color"></div>
+                  </div>
                     <div class="color-grid" id="color-grid"></div>
                 </div>
             </div>
@@ -947,7 +949,35 @@
         // Load colors
         async function loadColors(part) {
             const colorGrid = document.getElementById('color-grid');
+            const editFolderColor = document.getElementById('edit-folder-color');
+            
+            // Add Header with Rename Button
+            // Doing this by modifying the container or pre-pending to grid?
+            // The existing code has <div id="color-grid"></div> which only contains circles.
+            // But there is a header "Chọn màu" somewhere.
+            // Let's modify innerHTML completely or rely on existing header.
+            // Looking at user code, there is no header inside loadColors. Header is external.
+            // I will inject the button INTO the existing UI structure if possible, but I don't see the header in the snippet.
+            // I'll append a control bar BEFORE the grid inside this function or check if I can target the container.
+            // Actually, the "Chọn màu" header is static HTML probably.
+            // Let's look at where the header is.
+            
             colorGrid.innerHTML = '';
+            editFolderColor.innerHTML = '';
+            // Insert Rename Button at the start of the grid or separate row
+            // User requested: "thêm 1 nút thay đổi tên folder màu cho tôi ở đây"
+            const controlsDiv = document.createElement('div');
+            controlsDiv.style.width = '100%';
+            controlsDiv.style.marginBottom = '10px';
+            controlsDiv.style.display = 'flex';
+            controlsDiv.style.justifyContent = 'space-between';
+            controlsDiv.style.alignItems = 'center';
+
+            controlsDiv.innerHTML = `
+                <span style="font-weight:bold;">Màu sắc</span>
+                <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
+            `;
+            editFolderColor.appendChild(controlsDiv);
 
             const colors = part.colors.length > 0 ? part.colors : ['default'];
 
@@ -1027,7 +1057,72 @@
             const option = document.querySelector(`[data-color-folder="${colorFolder}"]`);
             if (option) option.classList.add('active');
 
+            // Handle Rename Button Visibility
+            const renameBtn = document.getElementById('rename-color-btn');
+            if (renameBtn) {
+                if (colorFolder && colorFolder !== 'default') {
+                    renameBtn.style.display = 'block';
+                    renameBtn.title = `Đổi tên folder: ${colorFolder}`;
+                } else {
+                    renameBtn.style.display = 'none';
+                }
+            }
+
             updateCharacter();
+        }
+
+        // Rename Current Color Logic
+        async function renameCurrentColor() {
+            if (!currentPart || !currentColor || currentColor === 'default') return;
+
+            const newName = prompt(`Nhập tên mới cho folder màu "${currentColor}":`, currentColor);
+            if (!newName || newName === currentColor) return;
+            
+            // Basic validation
+            // if (!/^[a-zA-Z0-9_-]+$/.test(newName)) // Loose validation
+
+            try {
+                const response = await fetch('/api/rename_color_folder', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        kit: CURRENT_KIT_FOLDER,
+                        part_folder: currentPart.part.folder,
+                        old_color: currentColor,
+                        new_color: newName
+                    })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                     // alert('Đổi tên thành công!');
+                     // We need to refresh the part structure to reflect the new folder name
+                     // Simplest way: Reload kit structure, find current part, re-render colors.
+                     // A optimization: Manually update local data.
+                     const index = currentPart.part.colors.indexOf(currentColor);
+                     if (index !== -1) {
+                         currentPart.part.colors[index] = newName;
+                     }
+                     
+                     // Also update characterLayers if using old color name
+                     if (characterLayers[currentPart.index] && characterLayers[currentPart.index].color === currentColor) {
+                         characterLayers[currentPart.index].color = newName;
+                     }
+                     
+                     // Re-load Colors UI
+                     loadColors(currentPart.part);
+                     // Select new color
+                     setTimeout(() => selectColor(newName, index), 50);
+                     
+                     // Re-render character to update image paths
+                     renderCharacter();
+
+                } else {
+                    alert('Lỗi: ' + result.message);
+                }
+            } catch (e) {
+                alert('Lỗi server: ' + e);
+            }
         }
 
         // Update character
@@ -1374,7 +1469,7 @@
                                         <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain; background:rgba(255,255,255,0.1); border-radius:4px;">
                                         <div style="margin-top:5px;">${group.main.name}</div>
                                         <div style="margin-top:8px; display:flex; justify-content:center; width:100%;">
-                                            <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;">🗑️ Xóa</button>
+                                            <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;"> Xóa</button>
                                         </div>
                                     </div>
                                  `;
@@ -1398,13 +1493,14 @@
                         // REGULAR ITEMS -> Horizontal Layout (Row)
                         const container = document.createElement('div');
                         container.className = 'file-debug-group';
+                        container.dataset.id = id; // Identify the group
                         // Changed flex-direction to row for side-by-side
                         container.style.cssText = 'background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: row; align-items: center; justify-content: space-around; gap: 10px;';
 
                         // Main Slot
                         if (group.main) {
                              container.innerHTML += `
-                                <div class="file-debug-slot" title="${group.main.name}" 
+                                <div class="file-debug-slot main-slot" title="${group.main.name}" 
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main.name}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:grab;">
                                     <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain; pointer-events: none;">
@@ -1412,7 +1508,7 @@
                                 </div>
                              `;
                         } else {
-                             container.innerHTML += `<div class="file-debug-slot" style="flex:1; opacity:0.5; text-align:center;">No Main</div>`;
+                             container.innerHTML += `<div class="file-debug-slot main-slot" style="flex:1; opacity:0.5; text-align:center;">No Main</div>`;
                         }
 
                         // Arrow (Right)
@@ -1425,7 +1521,7 @@
                             
                             // Draggable Thumb Container
                             container.innerHTML += `
-                                <div class="file-debug-slot" title="${thumbName}" 
+                                <div class="file-debug-slot thumb-slot" title="${thumbName}" 
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : thumbName}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; position:relative;">
                                     <img src="${group.thumb.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
@@ -1444,7 +1540,7 @@
                             
                             // Drop Zone Container
                             container.innerHTML += `
-                                <div class="file-debug-slot" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; height:80px; border: 2px dashed #444;"
+                                <div class="file-debug-slot thumb-slot" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; height:80px; border: 2px dashed #444;"
                                      ondragover="handleDragOver(event)" 
                                      ondrop="handleDrop(event, '${targetName}')">
                                      
@@ -1457,13 +1553,20 @@
                             `;
                             
                             // Prevent click propagation for the button in the container
-                             const lastDiv = container.lastElementChild;
-                             lastDiv.addEventListener('click', (e) => {
-                                  if(e.target.tagName !== 'BUTTON') return;
-                            });
+                             // Wait, querySelector is safer after append
                         }
                         
                         mainList.appendChild(container);
+
+                         // Re-bind click event for the Create Thumb button if it was added
+                         if (!group.thumb) {
+                            const lastDiv = container.querySelector('.thumb-slot');
+                            if(lastDiv) {
+                                lastDiv.addEventListener('click', (e) => {
+                                      if(e.target.tagName !== 'BUTTON') return;
+                                });
+                            }
+                         }
                     });
 
                     // Render Others (Append to Main List, NOT grid)
@@ -1490,9 +1593,11 @@
 
 
         async function createThumbnail(sourceName, targetName) {
-           // if(!confirm(`Tạo thumbnail ${targetName} từ ${sourceName}?`)) return;
+            // if(!confirm(`Tạo thumbnail ${targetName} từ ${sourceName}?`)) return;
             
-            showLoading('Đang tạo thumbnail...');
+           // showLoading('Đang tạo thumbnail...'); 
+           // User removed showLoading, keeping commented out
+           
             try {
                  // Get params again
                  const activeColorBtn = document.querySelector('.color-btn.active');
@@ -1501,6 +1606,9 @@
                  if (activeColorOption) {
                     colorParam = activeColorOption.dataset.colorFolder;
                  }
+                 
+                 // Derive ID from targetName (thumb_X.png)
+                 let id = targetName.replace('thumb_', '').replace('.png', '');
 
                  const response = await fetch('/api/create_thumb', {
                     method: 'POST',
@@ -1516,8 +1624,36 @@
                 
                 const result = await response.json();
                 if (result.success) {
-                    // alert('Tạo thành công!'); // No alert for speed
-                    showFolderFiles(); // Refresh
+                    // Update DOM directly instead of showFolderFiles()
+                    const container = document.querySelector(`.file-debug-group[data-id="${id}"]`);
+                    if (container) {
+                        const thumbSlot = container.querySelector('.thumb-slot');
+                        if (thumbSlot) {
+                             const timestamp = new Date().getTime();
+                             // Construct image URL (Approximation, verified by network tab usually)
+                             // Thumbnails are always saved in the parent folder by app_server.py
+                             let url = `/downloads/${CURRENT_KIT_FOLDER}/items_structured/${currentPart.part.folder}/${targetName}`;
+                             
+                             thumbSlot.className = "file-debug-slot thumb-slot";
+                             thumbSlot.style = "flex:1; display:flex; flex-direction:column; align-items:center; position:relative;";
+                             thumbSlot.title = targetName;
+                             thumbSlot.innerHTML = `
+                                <img src="${url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
+                                <span>${targetName}</span>
+                                
+                                <div style="margin-top:5px; display:flex; gap:5px;">
+                                    <button onclick="renameFile('${targetName}')" title="Đổi tên" style="cursor:pointer; border:none; background:#f39c12; color:white; border-radius:3px; padding:2px 5px;">✏️</button>
+                                    <button onclick="deleteFile('${targetName}')" title="Xóa" style="cursor:pointer; border:none; background:#c0392b; color:white; border-radius:3px; padding:2px 5px;">🗑️</button>
+                                </div>
+                             `;
+                             // Remove ondrop/ondragover which were on the empty slot
+                             thumbSlot.removeAttribute('ondrop');
+                             thumbSlot.removeAttribute('ondragover');
+                        }
+                    } else {
+                        // Fallback if ID finding fails (shouldn't happen)
+                        showFolderFiles();
+                    }
                 } else {
                     alert('Lỗi: ' + result.message);
                 }
@@ -1531,7 +1667,7 @@
         async function deleteFile(filename) {
            // if(!confirm(`Bạn chắc chắn muốn XÓA file ${filename}?`)) return;
             
-            showLoading('Đang xóa...');
+           // showLoading('Đang xóa...');
             try {
                  const activeColorBtn = document.querySelector('.color-btn.active');
                  let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
@@ -1550,7 +1686,55 @@
                 });
                 const result = await response.json();
                 if (result.success) {
-                    showFolderFiles();
+                    
+                    if (filename === 'nav.png') {
+                         showFolderFiles(); 
+                         return;
+                    }
+
+                    if (filename.startsWith('thumb_')) {
+                        let id = filename.replace('thumb_', '').replace('.png', '');
+                        const container = document.querySelector(`.file-debug-group[data-id="${id}"]`);
+                        if(container) {
+                             const thumbSlot = container.querySelector('.thumb-slot');
+                             if(thumbSlot) {
+                                  const mainNameSpan = container.querySelector('.main-slot span');
+                                  const mainName = mainNameSpan ? mainNameSpan.textContent : '';
+                                  const targetName = filename;
+
+                                  thumbSlot.className = "file-debug-slot thumb-slot";
+                                  thumbSlot.style = "flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; height:80px; border: 2px dashed #444;";
+                                  thumbSlot.title = "";
+                                  thumbSlot.innerHTML = `
+                                    <button onclick="createThumbnail('${mainName}', '${targetName}')" 
+                                            style="background: #27ae60; border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
+                                        + Tạo Thumb
+                                    </button>
+                                    <span style="color:#e67e22; font-size:10px; margin-top:5px;">Kéo thả ảnh vào đây</span>
+                                  `;
+                                  thumbSlot.setAttribute('ondragover', 'handleDragOver(event)');
+                                  thumbSlot.setAttribute('ondrop', `handleDrop(event, '${targetName}')`);
+                                  
+                                  thumbSlot.addEventListener('click', (e) => {
+                                      if(e.target.tagName !== 'BUTTON') return;
+                                  });
+                             }
+                        } else { showFolderFiles(); }
+                    } else {
+                        // Main File
+                        let id = filename.replace('.png', '');
+                        const container = document.querySelector(`.file-debug-group[data-id="${id}"]`);
+                        if(container) {
+                             const mainSlot = container.querySelector('.main-slot');
+                             if(mainSlot) {
+                                  mainSlot.style = "flex:1; opacity:0.5; text-align:center;";
+                                  mainSlot.innerHTML = "No Main";
+                                  mainSlot.removeAttribute('draggable');
+                                  mainSlot.removeAttribute('ondragstart');
+                             }
+                        } else { showFolderFiles(); }
+                    }
+
                 } else {
                     alert('Lỗi: ' + result.message);
                 }
@@ -1744,7 +1928,7 @@
             if(!currentPart) return;
             if(!confirm(`Bạn chắc chắn muốn GỘP TẤT CẢ layer từ các folder màu ra ngoài root của part ${currentPart.part.folder}?\nHành động này sẽ XÓA các folder màu sau khi gộp.`)) return;
             
-            showLoading('Đang gộp màu...');
+           // showLoading('Đang gộp màu...');
             try {
                 const response = await fetch('/api/flatten_colors', {
                     method: 'POST',
