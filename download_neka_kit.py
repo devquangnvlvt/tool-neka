@@ -348,103 +348,98 @@ def reorganize_kit(metadata_path, selected_y=None):
         
     print(f"Loaded {len(toning_map)} tonings.")
     
-    # --- New Logic: Calculate strictly sequential X based on drawing order ---
-    # 1. Collect sorting info for all parts
-    part_order_info = []
+    # --- New Logic: Calculate strictly sequential sorting for ALL layers (Main + Addons) ---
+    
+    # We need to flatten the "Part + AddonLayers" hierarchy into a linear list of "RenderLayers"
+    # Each RenderLayer will look like:
+    # {
+    #   'type': 'main' or 'addon',
+    #   'part_idx': original_part_idx,
+    #   'addon_id': (only for addon),
+    #   'base_z_index': part_z_index,
+    #   'relative_order': 0 for main, 1..N for addons,
+    #   'toning_id': toning_id_to_use
+    # }
+
+    all_render_layers = []
+    
     for idx, part in enumerate(parts):
-        if not isinstance(part, dict):
-            continue
+        if not isinstance(part, dict): continue
+        
+        part_z = part.get('zIndex', 0)
         lh_id = part.get('layerHeight', 'default')
-        # Use existing lh_map (which starts from 1) or fallback to zIndex
-        x_val = lh_map.get(lh_id, part.get('zIndex', 0))
-        part_order_info.append({
-            'original_idx': idx,
-            'x_val': x_val,
-            'z_index': part.get('zIndex', 0)
+        # Base sort key from layerHeight or zIndex
+        base_sort_val = lh_map.get(lh_id, part_z)
+        
+        # 1. Main Layer
+        all_render_layers.append({
+            'type': 'main',
+            'part': part,
+            'part_idx': idx,
+            'base_sort_val': base_sort_val,
+            'sub_order': 0, # Main is always first? Not necessarily, but usually.
+            'toning_id': part.get('toning') or part.get('mainLayerToning'),
+            'name': part.get('name', 'unnamed')
         })
+        
+        # 2. Addon Layers
+        # We need to find all unique addon layer IDs that appear in items
+        # AND map them to the definitions in part['addonLayers'] to get toning info
+        
+        addon_defs = {al['id']: al for al in part.get('addonLayers', []) if isinstance(al, dict)}
+        
+        # We also need to know the ORDER of addons. 
+        # Usually they are listed in addonLayers. Let's use that order.
+        for a_idx, al in enumerate(part.get('addonLayers', [])):
+             if not isinstance(al, dict): continue
+             a_id = al.get('id')
+             
+             all_render_layers.append({
+                'type': 'addon',
+                'part': part,
+                'part_idx': idx,
+                'addon_id': a_id,
+                'base_sort_val': base_sort_val,
+                'sub_order': a_idx + 1, # Stack on top of main
+                'toning_id': al.get('toning'),
+                'name': part.get('name', 'unnamed') + "_addon_" + str(a_idx+1)
+             })
 
-    # 2. Sort parts by X (layerHeight index), then zIndex, then original position
-    part_order_info.sort(key=lambda item: (item['x_val'], item['z_index'], item['original_idx']))
-
-    # 3. Map original_idx to a unique sequential X (1, 2, 3...)
-    sequential_x_map = {}
-    for seq_idx, info in enumerate(part_order_info):
-        sequential_x_map[info['original_idx']] = seq_idx + 1
-
-    # --- End New Logic ---
+    # Sort all layers
+    # Sort key: (LayerHeight/Z, PartIndex, SubOrder)
+    all_render_layers.sort(key=lambda x: (x['base_sort_val'], x['part_idx'], x['sub_order']))
     
+    # Assign sequential X
+    for seq_idx, layer in enumerate(all_render_layers):
+        layer['seq_x'] = seq_idx + 1
+        
+    print(f"Identified {len(all_render_layers)} total render layers (Main + Addons)")
+        
     total_files = 0
-    multi_layer_folders = []
     
-    # Load existing separated layers if we are doing partial download
-    json_path = os.path.join(base_dir, "separated_layers.json")
-    if os.path.exists(json_path):
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                multi_layer_folders = json.load(f)
-        except:
-            pass
-    
-    for part_idx, part in enumerate(parts):
-        if not isinstance(part, dict):
-            continue
+    for layer in all_render_layers:
+        part = layer['part']
+        part_idx = layer['part_idx']
         
         nav_position = part_idx + 1  # Y index
         if selected_y is not None and nav_position not in selected_y:
             continue
 
-        part_name = part.get('name', 'unnamed').replace(' ', '_').replace('/', '-')
-        part_zindex = part.get('zIndex', 0)
-        nav_position = part_idx + 1  # Y: navigation position (1-indexed)
-        
-        # Use strictly sequential X from our map
-        x_value = sequential_x_map.get(part_idx, part_idx + 1)
-        
-        # Format: X-Y only
+        x_value = layer['seq_x']
         folder_name = f"{x_value}-{nav_position}"
         
-        part_toning_id = part.get('toning')
+        # Determine Toning ID and Colors
+        t_id = layer['toning_id']
         toning_ids = set()
-        if part_toning_id:
-            toning_ids.add(part_toning_id)
+        if t_id: toning_ids.add(t_id)
         
-        # Also check mainLayerToning
-        main_toning = part.get('mainLayerToning')
-        if main_toning:
-            toning_ids.add(main_toning)
+        # Also, we might need fallback colors if specific items override it, 
+        # but for splitting folders, we should stick to the layer's primary toning.
         
-        # Also check addonLayers for more tonings
-        addon_layers = part.get('addonLayers', [])
-        if isinstance(addon_layers, list):
-            for al in addon_layers:
-                if isinstance(al, dict):
-                    al_toning = al.get('toning')
-                    if al_toning:
-                        toning_ids.add(al_toning)
-        
-        # Check individual item layers for tonings (some kits have them here)
-        items = part.get('items', [])
-        for item_layers in items:
-            if not isinstance(item_layers, list):
-                item_layers = [item_layers]
-            for layer in item_layers:
-                if isinstance(layer, dict):
-                    l_toning = layer.get('toning')
-                    if l_toning:
-                        toning_ids.add(l_toning)
-                    at_list = layer.get('addonTextures', [])
-                    for at in at_list:
-                        if isinstance(at, dict):
-                            at_toning = at.get('layer') or at.get('toning')
-                            if at_toning:
-                                toning_ids.add(at_toning)
-
-        num_items = len(items)
-
-        # Collect all unique colors from all tonings
-        all_colors_dict = {} # code -> color_data
-        for t_id in toning_ids:
-            colors_for_tid = toning_map.get(t_id, [])
+        # Collect colors
+        all_colors_dict = {} 
+        for tid in toning_ids:
+            colors_for_tid = toning_map.get(tid, [])
             for c in colors_for_tid:
                 code = c["code"]
                 if code not in all_colors_dict:
@@ -453,233 +448,122 @@ def reorganize_kit(metadata_path, selected_y=None):
         colors = list(all_colors_dict.values())
         if not colors:
             colors = [{"code": "default", "gradients": []}]
+            
+        print(f"> Processing Layer: {folder_name} ({layer['type']}) | Colors: {len(colors)}")
         
-        is_flattened = (num_items == 1 and len(colors) > 1)
-        
-        print(f"> Processing Part: {folder_name} | Items: {num_items} | Colors: {len(colors)} | Flattened: {is_flattened}")
-        
-        # Download navigation icon (cover image) first
+        # Nav Icon (For All Layers: Main and Addon)
         part_cover = part.get('cover')
         if part_cover:
-        
-        # Determine colors for this part
             base_part_dir = os.path.join(base_dir, "items_structured", folder_name)
-            if not os.path.exists(base_part_dir):
-                os.makedirs(base_part_dir)
+            if not os.path.exists(base_part_dir): os.makedirs(base_part_dir)
             
             nav_path = os.path.join(base_part_dir, "nav.png")
+            # We use the same cover for all split layers of the same part
+            
+            cache_dir = os.path.join(os.path.dirname(base_dir), "cache_blobs")
+            if not os.path.exists(cache_dir): os.makedirs(cache_dir)
+            cache_path = os.path.join(cache_dir, f"{part_cover}.png")
+            
             if not os.path.exists(nav_path):
                 try:
-                    cache_dir = os.path.join(os.path.dirname(base_dir), "cache_blobs")
-                    if not os.path.exists(cache_dir): 
-                        os.makedirs(cache_dir)
-                    
-                    cache_path = os.path.join(cache_dir, f"{part_cover}.png")
                     if not os.path.exists(cache_path):
-                        print(f"  Downloading nav icon {part_cover}...")
-                        url = f"https://img2.neka.cc/{part_cover}"
-                        resp = requests.get(url, timeout=10)
-                        if resp.status_code == 200:
-                            with open(cache_path, 'wb') as f:
-                                f.write(resp.content)
+                         requests.get(f"https://img2.neka.cc/{part_cover}", timeout=10)
+                         with open(cache_path, 'wb') as f: 
+                            f.write(requests.get(f"https://img2.neka.cc/{part_cover}").content)
                     
-                    shutil.copy2(cache_path, nav_path)
-                    print(f"  ✓ Saved nav icon")
-                except Exception as e:
-                    print(f"  Error downloading nav icon: {e}")
+                    if os.path.exists(cache_path):
+                        shutil.copy2(cache_path, nav_path)
+                        # print(f"  ✓ Saved nav icon") # Reduce verbosity
+                except: pass
+
+        # Iterate Items to find relevant blob
+        items = part.get('items', [])
         
-        # Download item thumbnails
-        base_part_dir = os.path.join(base_dir, "items_structured", folder_name)
-        if not os.path.exists(base_part_dir):
-            os.makedirs(base_part_dir)
-        
-        for item_idx, item_layers in enumerate(items):
-            if not isinstance(item_layers, list):
-                item_layers = [item_layers]
-            
-            # Get thumbnail from first layer
-            if len(item_layers) > 0:
-                first_layer = item_layers[0]
-                if isinstance(first_layer, dict):
-                    thumbnail_blob = first_layer.get('thumbnail') or first_layer.get('blob')
-                    
-                    if thumbnail_blob:
-                        thumb_path = os.path.join(base_part_dir, f"thumb_{item_idx + 1}.png")
-                        
-                        if not os.path.exists(thumb_path):
-                            try:
-                                cache_dir = os.path.join(os.path.dirname(base_dir), "cache_blobs")
-                                if not os.path.exists(cache_dir):
-                                    os.makedirs(cache_dir)
-                                
-                                cache_path = os.path.join(cache_dir, f"{thumbnail_blob}.png")
-                                if not os.path.exists(cache_path):
-                                    url = f"https://img2.neka.cc/{thumbnail_blob}"
-                                    resp = requests.get(url, timeout=10)
-                                    if resp.status_code == 200:
-                                        with open(cache_path, 'wb') as f:
-                                            f.write(resp.content)
-                                
-                                shutil.copy2(cache_path, thumb_path)
-                            except Exception as e:
-                                print(f"  Error downloading thumbnail {item_idx + 1}: {e}")
-        
-        print(f"  ✓ Saved {num_items} thumbnails")
-        
-        # Prepare merged folder
-        merged_base_dir = os.path.join(base_dir, "items_merged")
-        if not os.path.exists(merged_base_dir):
-            os.makedirs(merged_base_dir)
-        
+        # Loop Colors
         for color_data in colors:
             color_code = color_data["code"]
             gradients = color_data["gradients"]
+            lut = create_gradient_lut(gradients) if gradients else None
             
-            lut = None
-            if gradients:
-                lut = create_gradient_lut(gradients)
-            
-            # Target Dir logic
             if color_code == "default":
                 target_dir = os.path.join(base_dir, "items_structured", folder_name)
             else:
                 target_dir = os.path.join(base_dir, "items_structured", folder_name, color_code)
                 
-            if not os.path.exists(target_dir):
-                os.makedirs(target_dir)
+            if not os.path.exists(target_dir): os.makedirs(target_dir)
             
-            # Reset file counter for each color folder
             file_counter = 1
-            
             for item_idx, item_layers in enumerate(items):
                 if not isinstance(item_layers, list): item_layers = [item_layers]
                 
-                # Combine main layers with addonTextures and addonLayers (if simple)
-                all_blobs_to_process = []
-                for layer in item_layers:
-                    if not isinstance(layer, dict):
-                        continue
-                        
-                    crop = layer.get('crop', {})
-                    lx = crop.get('x', 0)
-                    ly = crop.get('y', 0)
-                    
-                    # 1. Main blob
-                    if layer.get('blob'):
-                        all_blobs_to_process.append({
-                            "blob": layer.get('blob'),
-                            "toning_id": part_toning_id, # Default toning
-                            "x": lx,
-                            "y": ly
-                        })
-                    
-                    # 2. Addon textures in this layer
-                    addon_textures = layer.get('addonTextures', [])
-                    for at in addon_textures:
-                        if isinstance(at, dict) and at.get('blob'):
-                             # Addon textures usually follow the part's toning or have their own
-                             at_toning = at.get('layer') or part_toning_id
-                             at_crop = at.get('crop', {})
-                             all_blobs_to_process.append({
-                                 "blob": at.get('blob'),
-                                 "toning_id": at_toning,
-                                 "x": at_crop.get('x', lx), # Fallback to layer x
-                                 "y": at_crop.get('y', ly)  # Fallback to layer y
-                             })
+                # Find the blob for this Layer (Main or Addon)
+                blob_to_process = None
                 
-                if len(all_blobs_to_process) > 1:
-                    if folder_name not in multi_layer_folders:
-                        multi_layer_folders.append(folder_name)
-                        # Save incrementally
-                        json_path = os.path.join(base_dir, "separated_layers.json")
-                        with open(json_path, 'w', encoding='utf-8') as f:
-                            json.dump(multi_layer_folders, f, ensure_ascii=False, indent=4)
-
-                for task in all_blobs_to_process:
-                    blob = task["blob"]
-                    current_lut = lut
+                for l_data in item_layers:
+                    if not isinstance(l_data, dict): continue
                     
-                    # Sequential naming: 1.png, 2.png, 3.png...
+                    if layer['type'] == 'main':
+                        # Valid if it has a blob AND it is the main definition (not nested deeper?)
+                        # The structure is usually simple. Main blob is at root of item_layer object.
+                        if l_data.get('blob'):
+                             blob_to_process = l_data.get('blob')
+                             # Use crop logic? Main layer crop is 'crop'.
+                             # We ignore crop/position for now as we just want the asset? 
+                             # User said "images and colors".
+                             break
+                    else:
+                        # Addon
+                        target_addon_id = layer['addon_id']
+                        addons = l_data.get('addonTextures', [])
+                        found = False
+                        for at in addons:
+                            if not isinstance(at, dict): continue
+                            # check if this at uses the target addon layer
+                            # ID match? 'layer' key in addonTexture matches 'id' in addonLayers
+                            if at.get('layer') == target_addon_id:
+                                blob_to_process = at.get('blob')
+                                found = True
+                                break
+                        if found: break
+                
+                # Download logic
+                if blob_to_process:
                     filename = f"{file_counter}.png"
                     filepath = os.path.join(target_dir, filename)
                     
-                    if os.path.exists(filepath):
-                        # Even if file exists, we MUST increment the counter to avoid skipping subsequent colors/items
-                        file_counter += 1
-                        continue
-                        
-                    url = f"https://img2.neka.cc/{blob}"
-                    try:
+                    if not os.path.exists(filepath):
+                        # Download routine
+                        url = f"https://img2.neka.cc/{blob_to_process}"
                         cache_dir = os.path.join(os.path.dirname(base_dir), "cache_blobs")
                         if not os.path.exists(cache_dir): os.makedirs(cache_dir)
+                        cache_path = os.path.join(cache_dir, f"{blob_to_process}.png")
                         
-                        cache_path = os.path.join(cache_dir, f"{blob}.png")
-                        if not os.path.exists(cache_path):
-                            print(f"Downloading blob {blob}...")
-                            resp = requests.get(url, timeout=10)
-                            if resp.status_code == 200:
-                                with open(cache_path, 'wb') as f_cache:
-                                    f_cache.write(resp.content)
-                            else:
-                                print(f"Failed to download {url}: {resp.status_code}")
-                                continue
-                        
-                        if current_lut:
-                            apply_gradient(cache_path, current_lut, filepath)
-                        else:
-                            shutil.copy2(cache_path, filepath)
+                        try:
+                            if not os.path.exists(cache_path):
+                                resp = requests.get(url, timeout=10)
+                                if resp.status_code == 200:
+                                    with open(cache_path, 'wb') as f: f.write(resp.content)
                             
-                        total_files += 1
-                        file_counter += 1
-                        
-                    except Exception as e:
-                        print(f"  Error handling blob {blob}: {e}")
-
-                # --- Merge logic: Create a composite of all layers for this item ---
-                # Only merge if there are multiple layers ("layer tách")
-                if len(all_blobs_to_process) > 1:
-                    try:
-                        # Use ow, oh from the first blob that has it
-                        ow, oh = 1436, 1902 # Defaults
-                        for layer in item_layers:
-                            if isinstance(layer, dict) and layer.get('crop'):
-                                ow = layer['crop'].get('ow', ow)
-                                oh = layer['crop'].get('oh', oh)
-                                break
-                        
-                        merged_img = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
-                        
-                        # Re-calculate indices to find where they were saved
-                        temp_counter = file_counter - len(all_blobs_to_process)
-                        
-                        for task in all_blobs_to_process:
-                            layer_filename = f"{temp_counter}.png"
-                            layer_path = os.path.join(target_dir, layer_filename)
-                            
-                            if os.path.exists(layer_path):
-                                l_img = Image.open(layer_path).convert("RGBA")
-                                # Fix misalignment: only paste at (x, y) if the image is NOT full-size
-                                if l_img.size == (ow, oh):
-                                    merged_img.paste(l_img, (0, 0), l_img)
-                                else:
-                                    merged_img.paste(l_img, (task['x'], task['y']), l_img)
-                            
-                            temp_counter += 1
-                        
-                        # Save merged result
-                        merged_item_dir = os.path.join(merged_base_dir, folder_name)
-                        if color_code != "default":
-                            merged_item_dir = os.path.join(merged_item_dir, color_code)
-                        
-                        if not os.path.exists(merged_item_dir):
-                            os.makedirs(merged_item_dir)
-                            
-                        merged_filename = f"{item_idx + 1}.png"
-                        merged_path = os.path.join(merged_item_dir, merged_filename)
-                        merged_img.save(merged_path)
-                        
-                    except Exception as e:
-                        print(f"  Error merging layers for item {item_idx + 1}: {e}")
+                            if os.path.exists(cache_path):
+                                if lut: apply_gradient(cache_path, lut, filepath)
+                                else: shutil.copy2(cache_path, filepath)
+                                total_files += 1
+                        except: pass
+                
+                # Always increment counter to keep sync between different layers of same item??
+                # YES. If Item 1 has Main but no Addon, Addon folder should probably skip or have empty placeholder?
+                # User wants "X-Y". If Item 1 is missing Addon, file "1.png" in Addon folder shouldn't exist?
+                # BUT if we skip, "2.png" in Addon folder might correspond to "2.png" in Main folder.
+                # If we skip, then "1.png" in Addon folder would correspond to Item 2. VALIDITY CHECK FAIL.
+                # SOLUTION: We must increment `file_counter` regardless.
+                # But creating empty files is messy.
+                # Standard practice: Skip creating file, but increment counter.
+                # Frontend must handle missing file 1.png and finding 2.png.
+                # However, if we just check `if blob_to_process` we skip downloading.
+                # We need to ensure we don't desync IDs.
+                # The filename is based on `file_counter`.
+                
+                file_counter += 1
 
     print(f"Done! Created {total_files} colored files in 'items_structured'.")
 
