@@ -316,6 +316,18 @@
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
       }
 
+      .color-checkbox {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        z-index: 5;
+        accent-color: #e74c3c;
+      }
+
+
       .loading {
         text-align: center;
         padding: 40px;
@@ -619,12 +631,12 @@
             </select>
           </div>
 
-          <div class="part-navigation">
+          <div id="part-navigation-area" class="part-navigation focus-region">
             <h3>Chọn bộ phận <span id="count-layer"></span></h3>
             <div class="nav-icons" id="nav-icons"></div>
           </div>
 
-          <div class="item-selector">
+          <div id="item-selector-area" class="item-selector focus-region">
             <div
               style="
                 display: flex;
@@ -689,14 +701,14 @@
                   "
                   onclick="promptDeletePart()"
                 >
-                  Xóa
+                Xóa layer
                 </button>
               </div>
             </div>
             <div class="item-grid" id="item-grid"></div>
           </div>
 
-          <div class="color-selector">
+          <div id="color-selector-area" class="color-selector focus-region">
             <div>
               <div id="edit-folder-color"></div>
             </div>
@@ -721,6 +733,9 @@
       let currentColorIndex = 0;
       let characterLayers = {};
       let imgVers = Date.now();
+      
+      // Multi-region focus management
+      let activeFocusArea = "colors"; // 'parts', 'items', 'colors'
       let canvasWidth = 1436;
       let canvasHeight = 1902;
 
@@ -953,6 +968,7 @@
             );
           }
         }
+        updateFocusUI(); // Initial focus UI update
       }
 
       // Internal select item for auto-init
@@ -1125,9 +1141,14 @@
         controlsDiv.style.justifyContent = "space-between";
         controlsDiv.style.alignItems = "center";
 
+        const colorCount = part.colors.length > 0 ? part.colors.length : 1; // 1 if only default
+
         controlsDiv.innerHTML = `
-                <span style="font-weight:bold;">Màu sắc</span>
-                <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
+                <span style="font-weight:bold;">Màu sắc (${colorCount})</span>
+                <div style="display: flex; gap: 5px;">
+                    <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
+                    <button id="delete-colors-btn" onclick="confirmDeleteColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 4px;">Xóa màu đã chọn (F)</button>
+                </div>
             `;
         editFolderColor.appendChild(controlsDiv);
 
@@ -1150,13 +1171,29 @@
 
           colorDiv.onclick = () => selectColor(colorFolder, index);
 
+          if (colorFolder !== "default") {
+            const checkbox = document.createElement("input");
+            checkbox.type = "checkbox";
+            checkbox.className = "color-checkbox";
+            checkbox.name = "color-to-delete";
+            checkbox.value = colorFolder;
+            checkbox.onclick = (e) => e.stopPropagation();
+            checkbox.title = "Chọn để xóa (D)";
+            colorDiv.appendChild(checkbox);
+          }
+
           colorGrid.appendChild(colorDiv);
+
         });
+
+        // Show/Hide Delete Button
+        document.getElementById("delete-colors-btn").style.display = (part.colors.length > 0) ? "block" : "none";
 
         // Select first color by default
         if (colors.length > 0) {
           selectColor(colors[0], 0);
         }
+
       }
 
       // Select item
@@ -1290,6 +1327,59 @@
           alert("Lỗi server: " + e);
         }
       }
+
+      async function confirmDeleteColors() {
+        const checkboxes = document.querySelectorAll('.color-checkbox:checked');
+        const colorsToDelete = Array.from(checkboxes).map(cb => cb.value);
+        
+        if (colorsToDelete.length === 0) {
+          alert("Vui lòng tích chọn ít nhất một màu (ô vuông nhỏ trên vòng tròn màu) để xóa.");
+          return;
+        }
+        
+        if (!confirm(`Bạn có chắc chắn muốn xóa ${colorsToDelete.length} folder màu sắc đã chọn trực tiếp khỏi bộ phận này? Thao tác này không thể hoàn tác.`)) {
+          return;
+        }
+        
+        showLoading(true, "Đang xóa các folder màu sắc...");
+        
+        try {
+          const response = await fetch("/api/delete_color_folders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              kit: CURRENT_KIT_FOLDER,
+              part_folder: currentPart.part.folder,
+              colors: colorsToDelete
+            })
+          });
+          
+          const result = await response.json();
+          if (result.success) {
+            // Update local data
+            currentPart.part.colors = currentPart.part.colors.filter(c => !colorsToDelete.includes(c));
+            
+            // If current color was deleted, switch to default
+            if (colorsToDelete.includes(currentColor)) {
+              currentColor = "default";
+              currentColorIndex = 0;
+            }
+            
+            loadColors(currentPart.part);
+            renderCharacter();
+            alert("Đã xóa màu thành công!");
+          } else {
+            alert("Lỗi: " + result.message);
+          }
+        } catch (e) {
+          alert("Lỗi kết nối: " + e);
+        } finally {
+          hideLoading();
+        }
+      }
+
+
+
 
       // Update character
       async function updateCharacter() {
@@ -1702,7 +1792,7 @@
               if (group.main) {
                 container.innerHTML += `
                                 <div class="file-debug-slot main-slot" title="${group.main.name}" 
-                                     draggable="true" ondragstart="handleDragStart(event, '${group.main.name}')"
+                                     draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : ""}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:grab;">
                                     <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain; pointer-events: none;">
                                     <span>${group.main.name}</span>
@@ -2583,7 +2673,131 @@
           btn.textContent = "✅ Lưu";
         }
       }
+
+      function setFocusArea(area) {
+        activeFocusArea = area;
+        updateFocusUI();
+      }
+
+      function updateFocusUI() {
+        document.getElementById("part-navigation-area").classList.remove("active-focus");
+        document.getElementById("item-selector-area").classList.remove("active-focus");
+        document.getElementById("color-selector-area").classList.remove("active-focus");
+
+        if (activeFocusArea === "parts") {
+          document.getElementById("part-navigation-area").classList.add("active-focus");
+        } else if (activeFocusArea === "items") {
+          document.getElementById("item-selector-area").classList.add("active-focus");
+        } else if (activeFocusArea === "colors") {
+          document.getElementById("color-selector-area").classList.add("active-focus");
+        }
+      }
+
+      // Keyboard navigation for colors
+      window.addEventListener("keydown", (e) => {
+        // Only ignore if user is typing in a text input or textarea
+        if (e.target.tagName === "TEXTAREA" || 
+           (e.target.tagName === "INPUT" && ["text", "number", "search"].includes(e.target.type))) {
+          return;
+        }
+
+        // Also check if any modal is open
+        const modals = ["merge-modal-overlay", "layer-details-modal", "file-debug-modal"];
+        for (const id of modals) {
+          const m = document.getElementById(id);
+          if (m && m.style.display !== "none" && m.style.display !== "") return;
+        }
+
+        // 1, 2, 3 to switch focus regions
+        if (e.key === "1") { setFocusArea("parts"); return; }
+        if (e.key === "2") { setFocusArea("items"); return; }
+        if (e.key === "3") { setFocusArea("colors"); return; }
+
+        if (!currentPart) return;
+
+        // Logic based on focused area
+        if (activeFocusArea === "parts") {
+          let newIdx = currentPart.index;
+          if (e.key === "ArrowUp" || e.key === "ArrowLeft") newIdx--;
+          else if (e.key === "ArrowDown" || e.key === "ArrowRight") newIdx++;
+          else return;
+
+          if (newIdx >= 0 && newIdx < kitStructure.length) {
+            e.preventDefault();
+            selectPart(newIdx, kitStructure[newIdx]);
+            document.querySelector(".nav-icon.active")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+          return;
+        }
+
+        if (activeFocusArea === "items") {
+          const grid = document.getElementById("item-grid");
+          const items = grid.querySelectorAll(".item-option");
+          if (!items.length) return;
+
+          const gridStyle = window.getComputedStyle(grid);
+          const columns = gridStyle.getPropertyValue("grid-template-columns").split(" ").length;
+
+          // Find current active index
+          let currentIndex = -1;
+          items.forEach((item, idx) => { if (item.classList.contains("active")) currentIndex = idx; });
+
+          let newIdx = currentIndex;
+          switch (e.key) {
+            case "ArrowLeft": newIdx--; break;
+            case "ArrowRight": newIdx++; break;
+            case "ArrowUp": newIdx -= columns; break;
+            case "ArrowDown": newIdx += columns; break;
+            default: return;
+          }
+
+          if (newIdx >= 0 && newIdx < items.length) {
+            e.preventDefault();
+            items[newIdx].click();
+            items[newIdx].scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+          return;
+        }
+
+        if (activeFocusArea === "colors") {
+          const colors = currentPart.part.colors.length > 0 ? currentPart.part.colors : ["default"];
+          const grid = document.getElementById("color-grid");
+          if (!grid || !grid.children.length) return;
+
+          const gridStyle = window.getComputedStyle(grid);
+          const columns = gridStyle.getPropertyValue("grid-template-columns").split(" ").length;
+
+          let newIndex = currentColorIndex;
+          switch (e.key) {
+            case "ArrowLeft": newIndex = currentColorIndex - 1; break;
+            case "ArrowRight": newIndex = currentColorIndex + 1; break;
+            case "ArrowUp": newIndex = currentColorIndex - columns; break;
+            case "ArrowDown": newIndex = currentColorIndex + columns; break;
+            case "d":
+            case "D":
+              e.preventDefault();
+              const activeOption = document.querySelector(".color-option.active");
+              const checkbox = activeOption?.querySelector(".color-checkbox");
+              if (checkbox) checkbox.click();
+              return;
+            case "f":
+            case "F":
+              confirmDeleteColors();
+              e.preventDefault();
+              return;
+            default: return;
+          }
+
+          if (newIndex >= 0 && newIndex < colors.length) {
+            e.preventDefault();
+            selectColor(colors[newIndex], newIndex);
+            const targetElement = grid.children[newIndex];
+            if (targetElement) targetElement.scrollIntoView({ behavior: "smooth", block: "nearest" });
+          }
+        }
+      });
     </script>
+
     <!-- Merge Modal Workspace -->
     <div id="merge-modal-overlay" class="modal-overlay">
       <div class="merge-modal">
@@ -2770,16 +2984,30 @@
     <script>
       function toggleMergeBackground() {
         const canvas = document.getElementById("merge-preview-canvas");
-        // Check if current background is custom (by checking existence of style attribute or specific value)
         const currentBg = canvas.style.background;
-
         if (currentBg === "rgb(34, 34, 34)" || currentBg === "#222") {
-          // Revert to CSS default (checkerboard)
           canvas.style.background = "";
         } else {
-          // Set to Dark
           canvas.style.background = "#222";
         }
+      }
+
+      function updateFocusUI() {
+        document.querySelectorAll(".focus-region").forEach((reg) => {
+          reg.classList.remove("active-focus");
+        });
+        const targetId = {
+          parts: "nav-icons",
+          items: "item-grid",
+          colors: "color-grid",
+        }[activeFocusArea];
+        const el = document.getElementById(targetId);
+        if (el) el.classList.add("active-focus");
+      }
+
+      function setFocusArea(area) {
+        activeFocusArea = area;
+        updateFocusUI();
       }
     </script>
     <!-- File Debug Modal -->
@@ -2839,6 +3067,8 @@
     </div>
 
     <!-- Global Loading Overlay -->
+
+
     <div id="global-loading-overlay">
       <div class="spinner"></div>
       <p id="global-loading-message">Đang xử lý...</p>

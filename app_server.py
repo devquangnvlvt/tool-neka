@@ -151,7 +151,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/get_item_layers': self.handle_get_item_layers,
             '/api/upload_file': self.handle_upload_file,
             '/api/rename_color_folder': self.handle_rename_color_folder,
+            '/api/delete_color_folders': self.handle_delete_color_folders,
         }
+
 
         handler = endpoints.get(self.path)
         if handler:
@@ -1255,6 +1257,50 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, f"Error renaming color: {str(e)}")
+
+    def handle_delete_color_folders(self, data):
+        kit_folder = data.get('kit')
+        part_folder = data.get('part_folder')
+        colors_to_delete = data.get('colors', []) # List of color folder names
+
+        if not kit_folder or not part_folder or not colors_to_delete:
+            self.send_api_response(False, "Missing parameters (kit, part_folder, colors)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            struct_base = safe_join(kit_path, part_folder)
+            
+            if not os.path.exists(struct_base):
+                self.send_api_response(False, "Part folder not found")
+                return
+
+            deleted_count = 0
+            errors = []
+
+            for color in colors_to_delete:
+                if color == 'default':
+                    continue # Safety: never delete default
+                
+                color_path = safe_join(struct_base, color)
+                if os.path.exists(color_path) and os.path.isdir(color_path):
+                    try:
+                        shutil.rmtree(color_path)
+                        deleted_count += 1
+                    except Exception as e:
+                        errors.append(f"Could not delete {color}: {str(e)}")
+                else:
+                    errors.append(f"Color folder not found: {color}")
+
+            msg = f"Successfully deleted {deleted_count} color folders."
+            if errors:
+                msg += " Warnings: " + "; ".join(errors)
+            
+            self.send_api_response(True, msg)
+
+        except Exception as e:
+            self.send_api_response(False, f"Error deleting colors: {str(e)}")
+
 
     def handle_upload_file(self, data):
         import base64
