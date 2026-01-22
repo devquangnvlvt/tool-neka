@@ -2,12 +2,15 @@ import os
 import zipfile
 import sys
 import time
+from config import DATA_DIR
+
 
 def zip_kit(kit_folder):
     """
     Zips the structured items and metadata of a kit.
     """
-    kit_path = os.path.join("downloads", kit_folder)
+    kit_path = os.path.join(DATA_DIR, kit_folder)
+
     target_path = kit_path
     if not os.path.exists(target_path):
         print(f"Error: {target_path} not found.")

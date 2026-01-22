@@ -6,6 +6,8 @@ import requests
 import shutil
 from PIL import Image
 import numpy as np
+from config import DATA_DIR
+
 
 # Try to import selenium
 try:
@@ -678,7 +680,8 @@ if __name__ == "__main__":
     
     # Step 3: Create final directory structure
     # Use ID-only naming to avoid Chinese characters in folder names
-    base_dir = os.path.join("downloads", f"neka_{kit_id}")
+    base_dir = os.path.join(DATA_DIR, f"neka_{kit_id}")
+
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
     

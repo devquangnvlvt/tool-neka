@@ -4,6 +4,8 @@ import sys
 import shutil
 import re
 import time
+from config import DATA_DIR
+
 
 def delete_part(kit_folder, part_y):
     """
@@ -25,7 +27,8 @@ def delete_part(kit_folder, part_y):
         base_path = os.path.dirname(os.path.abspath(__file__))
         
         # 1. Identify and remove folders for the target part
-        structured_dir = os.path.join(base_path, "downloads", kit_folder)
+        structured_dir = os.path.join(DATA_DIR, kit_folder)
+
 
         if not os.path.exists(structured_dir):
             return False, f"Structured directory not found at {structured_dir}"
@@ -33,7 +36,8 @@ def delete_part(kit_folder, part_y):
         print(f"DEBUG: Deleting folders for part Y index: {part_y}")
 
         # 2. Rename/Delete structured folders
-        structured_dir = os.path.join(base_path, "downloads", kit_folder)
+        structured_dir = os.path.join(DATA_DIR, kit_folder)
+
 
         if os.path.exists(structured_dir):
             # Find the X of the part being deleted
@@ -99,7 +103,8 @@ def delete_part(kit_folder, part_y):
                             time.sleep(1.0)
             
             # 3. Synchronize separated_layers.json
-            sep_layers_path = os.path.join(base_path, "downloads", kit_folder, "separated_layers.json")
+            sep_layers_path = os.path.join(DATA_DIR, kit_folder, "separated_layers.json")
+
             if os.path.exists(sep_layers_path):
                 try:
                     with open(sep_layers_path, 'r', encoding='utf-8') as f:

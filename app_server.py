@@ -7,6 +7,9 @@ import zipfile
 import subprocess
 import re
 from urllib.parse import urlparse, parse_qs
+import mimetypes
+from config import DATA_DIR
+
 
 PORT = 8000
 
@@ -64,6 +67,45 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             else:
                 self.send_api_response(False, "Missing kit parameter")
             return
+        
+        # Static file proxy for DATA_DIR
+        # This replaces the need for the browser to access UNC paths directly
+        if parsed_path.path.startswith('/downloads/'):
+            try:
+                # Remove '/downloads/' prefix to get the relative path
+                rel_path = parsed_path.path[len('/downloads/'):].lstrip('/')
+                # Clean up query params if any
+                rel_path = rel_path.split('?')[0]
+                
+                # Full path on the network/custom storage
+                full_path = os.path.join(DATA_DIR, rel_path.replace('/', os.sep))
+                
+                if os.path.exists(full_path) and os.path.isfile(full_path):
+                    # Basic security: ensure target is within DATA_DIR
+                    if not os.path.abspath(full_path).startswith(os.path.abspath(DATA_DIR)):
+                         self.send_error(403, "Access denied")
+                         return
+
+                    content_type, _ = mimetypes.guess_type(full_path)
+                    if not content_type:
+                        content_type = 'application/octet-stream'
+                    
+                    with open(full_path, 'rb') as f:
+                        content = f.read()
+                        
+                    self.send_response(200)
+                    self.send_header('Content-Type', content_type)
+                    self.send_header('Content-Length', len(content))
+                    # Cache for 1 hour to speed up UI
+                    self.send_header('Cache-Control', 'public, max-age=3600')
+                    self.end_headers()
+                    self.wfile.write(content)
+                else:
+                    self.send_error(404, f"File not found: {rel_path}")
+            except Exception as e:
+                self.send_error(500, str(e))
+            return
+
         elif parsed_path.path == '/api/debug_folder_files':
             query = parse_qs(parsed_path.query)
             kit = query.get('kit', [None])[0]
@@ -124,9 +166,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_get_kits_list(self, data):
         try:
-            base_dir = "downloads"
+            base_dir = DATA_DIR
             kits = []
             if os.path.exists(base_dir):
+
                 for entry in os.listdir(base_dir):
                     full_path = os.path.join(base_dir, entry)
                     if os.path.isdir(full_path):
@@ -157,7 +200,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             return
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             structured_dir = safe_join(kit_path, "")
             if not os.path.exists(kit_path):
 
@@ -326,7 +370,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             
             struct_base = safe_join(kit_path, "")
 
@@ -411,7 +456,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             
             # Get part index from folder name
             match = re.search(r"-(\d+)$", folder_name)
@@ -517,7 +563,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             
             # Target structured folder
             struct_base = safe_join(kit_path, folder_name)
@@ -608,7 +655,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             from PIL import Image
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             
             # Determine directory
             struct_base = safe_join(kit_path, folder_name)
@@ -651,7 +699,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             struct_base = safe_join(kit_path, folder_name)
 
             
@@ -686,7 +735,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             struct_base = safe_join(kit_path, folder_name)
 
             
@@ -741,7 +791,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             structured_dir = safe_join(kit_path, folder_name)
 
 
@@ -959,7 +1010,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            target_dir = os.path.join(base_path, "downloads", kit_folder, folder_name)
+            target_dir = os.path.join(DATA_DIR, kit_folder, folder_name)
+
 
 
             if not os.path.exists(target_dir):
@@ -1045,7 +1097,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = os.path.join(base_path, "downloads", kit_folder)
+            kit_path = os.path.join(DATA_DIR, kit_folder)
+
             target_dir = os.path.join(kit_path, folder_name)
 
 
@@ -1180,7 +1233,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             struct_base = safe_join(kit_path, part_folder)
 
             
@@ -1216,7 +1270,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            kit_path = safe_join(base_path, "downloads", kit_folder)
+            kit_path = safe_join(DATA_DIR, kit_folder)
+
             
             # Target structured folder
             struct_base = safe_join(kit_path, folder_name)

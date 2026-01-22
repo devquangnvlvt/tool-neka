@@ -1,7 +1,9 @@
 import os
 import json
+from config import DATA_DIR
 
-base_dir = "downloads"
+base_dir = DATA_DIR
+
 kits = []
 
 if os.path.exists(base_dir):
