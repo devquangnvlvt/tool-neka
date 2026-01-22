@@ -123,6 +123,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
              return
 
         return super().do_GET()
+       
 
     def do_POST(self):
         try:
@@ -152,6 +153,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/upload_file': self.handle_upload_file,
             '/api/rename_color_folder': self.handle_rename_color_folder,
             '/api/delete_color_folders': self.handle_delete_color_folders,
+             '/api/download_kit': self.handle_download_kit,
         }
 
 
@@ -1218,6 +1220,50 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             try: self.send_api_response(False, f"Server Error: {str(e)}")
             except: pass
 
+    def handle_download_kit(self, data):
+            kit_id = data.get('id')
+            if not kit_id:
+                self.send_api_response(False, "Missing 'id' parameter")
+                return
+
+            try:
+                # Gọi script download_neka_kit.py
+                subprocess.run(['python', 'download_neka_kit.py', str(kit_id)], check=True)
+
+                # Đường dẫn thư mục sau khi tải
+                kit_folder = f'neka_{kit_id}'
+                kit_path = os.path.join(DATA_DIR, kit_folder)
+                if not os.path.exists(kit_path):
+                    self.send_api_response(False, f"Không tìm thấy dữ liệu cho kit {kit_id}")
+                    return
+
+                # Tạo file ZIP để tải về
+                zip_path = os.path.join(DATA_DIR, f"{kit_folder}.zip")
+                with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                    for root, _, files in os.walk(kit_path):
+                        for file in files:
+                            abs_path = os.path.join(root, file)
+                            rel_path = os.path.relpath(abs_path, kit_path)
+                            zipf.write(abs_path, rel_path)
+
+                # Trả file zip về cho client
+                with open(zip_path, 'rb') as f:
+                    zip_data = f.read()
+
+                self.send_response(200)
+                self.send_header('Content-type', 'application/zip')
+                self.send_header('Content-Disposition', f'attachment; filename="{kit_folder}.zip"')
+                self.send_header('Content-Length', str(len(zip_data)))
+                self.end_headers()
+                self.wfile.write(zip_data)
+
+                # Tùy chọn: xóa zip sau khi gửi để tiết kiệm dung lượng
+                # os.remove(zip_path)
+
+            except subprocess.CalledProcessError:
+                self.send_api_response(False, f"Lỗi khi chạy download_neka_kit.py {kit_id}")
+            except Exception as e:
+                self.send_api_response(False, f"Server error: {str(e)}")
 
     def handle_rename_color_folder(self, data):
         kit_folder = data.get('kit')

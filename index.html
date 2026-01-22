@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Tải Neka</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            margin-top: 80px;
+        }
+
+        input,
+        button {
+            padding: 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Tải Neka</h2>
+    <input id="kitId" placeholder="Nhập ID Neka" />
+    <button onclick="download()">Tải về</button>
+
+    <script>
+        async function download() {
+            const id = document.getElementById('kitId').value.trim();
+            if (!id) return alert("Nhập ID!");
+            const res = await fetch('/api/download_kit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `neka_${id}.zip`;
+                a.click();
+                URL.revokeObjectURL(url);
+            } else {
+                alert("Lỗi tải kit!");
+            }
+        }
+    </script>
+</body>
+
+</html>
