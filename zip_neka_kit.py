@@ -8,22 +8,29 @@ def zip_kit(kit_folder):
     Zips the structured items and metadata of a kit.
     """
     kit_path = os.path.join("downloads", kit_folder)
-    if not os.path.exists(kit_path):
-        print(f"Error: {kit_path} not found.")
+    target_path = kit_path
+    if not os.path.exists(target_path):
+        print(f"Error: {target_path} not found.")
         return
 
     output_zip = f"{kit_folder}.zip"
-    print(f"Zipping {kit_folder} to {output_zip}...")
+    print(f"Zipping {target_path} to {output_zip}...")
     
     start_time = time.time()
     
     with zipfile.ZipFile(output_zip, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        for root, dirs, files in os.walk(kit_path):
+        for root, dirs, files in os.walk(target_path):
             for file in files:
+                # Don't include the output zip file itself
+                if file == output_zip:
+                    continue
+                    
                 file_path = os.path.join(root, file)
-                # Create relative path for zip (preserving folder structure inside kit_folder)
-                arcname = os.path.relpath(file_path, os.path.dirname(kit_path))
+                # Create relative path for zip 
+                arcname = os.path.relpath(file_path, target_path)
                 zipf.write(file_path, arcname)
+
+
 
     end_time = time.time()
     size_mb = os.path.getsize(output_zip) / (1024 * 1024)

@@ -463,7 +463,7 @@ def reorganize_kit(metadata_path, selected_y=None):
         if part_cover:
         
         # Determine colors for this part
-            base_part_dir = os.path.join(base_dir, "items_structured", folder_name)
+            base_part_dir = os.path.join(base_dir, folder_name)
             if not os.path.exists(base_part_dir):
                 os.makedirs(base_part_dir)
             
@@ -489,7 +489,8 @@ def reorganize_kit(metadata_path, selected_y=None):
                     print(f"  Error downloading nav icon: {e}")
         
         # Download item thumbnails
-        base_part_dir = os.path.join(base_dir, "items_structured", folder_name)
+        base_part_dir = os.path.join(base_dir, folder_name)
+
         if not os.path.exists(base_part_dir):
             os.makedirs(base_part_dir)
         
@@ -526,10 +527,8 @@ def reorganize_kit(metadata_path, selected_y=None):
         
         print(f"  ✓ Saved {num_items} thumbnails")
         
-        # Prepare merged folder
-        merged_base_dir = os.path.join(base_dir, "items_merged")
-        if not os.path.exists(merged_base_dir):
-            os.makedirs(merged_base_dir)
+        # Merged folder is no longer needed per user request
+
         
         for color_data in colors:
             color_code = color_data["code"]
@@ -541,9 +540,10 @@ def reorganize_kit(metadata_path, selected_y=None):
             
             # Target Dir logic
             if color_code == "default":
-                target_dir = os.path.join(base_dir, "items_structured", folder_name)
+                target_dir = os.path.join(base_dir, folder_name)
             else:
-                target_dir = os.path.join(base_dir, "items_structured", folder_name, color_code)
+                target_dir = os.path.join(base_dir, folder_name, color_code)
+
                 
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
@@ -635,53 +635,12 @@ def reorganize_kit(metadata_path, selected_y=None):
                     except Exception as e:
                         print(f"  Error handling blob {blob}: {e}")
 
-                # --- Merge logic: Create a composite of all layers for this item ---
-                # Only merge if there are multiple layers ("layer tách")
-                if len(all_blobs_to_process) > 1:
-                    try:
-                        # Use ow, oh from the first blob that has it
-                        ow, oh = 1436, 1902 # Defaults
-                        for layer in item_layers:
-                            if isinstance(layer, dict) and layer.get('crop'):
-                                ow = layer['crop'].get('ow', ow)
-                                oh = layer['crop'].get('oh', oh)
-                                break
-                        
-                        merged_img = Image.new("RGBA", (ow, oh), (0, 0, 0, 0))
-                        
-                        # Re-calculate indices to find where they were saved
-                        temp_counter = file_counter - len(all_blobs_to_process)
-                        
-                        for task in all_blobs_to_process:
-                            layer_filename = f"{temp_counter}.png"
-                            layer_path = os.path.join(target_dir, layer_filename)
-                            
-                            if os.path.exists(layer_path):
-                                l_img = Image.open(layer_path).convert("RGBA")
-                                # Fix misalignment: only paste at (x, y) if the image is NOT full-size
-                                if l_img.size == (ow, oh):
-                                    merged_img.paste(l_img, (0, 0), l_img)
-                                else:
-                                    merged_img.paste(l_img, (task['x'], task['y']), l_img)
-                            
-                            temp_counter += 1
-                        
-                        # Save merged result
-                        merged_item_dir = os.path.join(merged_base_dir, folder_name)
-                        if color_code != "default":
-                            merged_item_dir = os.path.join(merged_item_dir, color_code)
-                        
-                        if not os.path.exists(merged_item_dir):
-                            os.makedirs(merged_item_dir)
-                            
-                        merged_filename = f"{item_idx + 1}.png"
-                        merged_path = os.path.join(merged_item_dir, merged_filename)
-                        merged_img.save(merged_path)
-                        
-                    except Exception as e:
-                        print(f"  Error merging layers for item {item_idx + 1}: {e}")
+                # Merge logic was removed per user request
 
-    print(f"Done! Created {total_files} colored files in 'items_structured'.")
+
+
+    print(f"Done! Created {total_files} colored files in '{base_dir}'.")
+
 
 # ============= MAIN =============
 
@@ -765,4 +724,5 @@ if __name__ == "__main__":
 
     reorganize_kit(final_metadata_path, selected_y=selected_y)
     
-    print(f"\n✓ Complete! Check: {base_dir}/items_structured/")
+    print(f"\n✓ Complete! Check: {base_dir}/")
+

@@ -25,14 +25,16 @@ def delete_part(kit_folder, part_y):
         base_path = os.path.dirname(os.path.abspath(__file__))
         
         # 1. Identify and remove folders for the target part
-        structured_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured")
+        structured_dir = os.path.join(base_path, "downloads", kit_folder)
+
         if not os.path.exists(structured_dir):
             return False, f"Structured directory not found at {structured_dir}"
 
         print(f"DEBUG: Deleting folders for part Y index: {part_y}")
 
         # 2. Rename/Delete structured folders
-        structured_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured")
+        structured_dir = os.path.join(base_path, "downloads", kit_folder)
+
         if os.path.exists(structured_dir):
             # Find the X of the part being deleted
             target_x = None

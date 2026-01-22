@@ -130,7 +130,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 for entry in os.listdir(base_dir):
                     full_path = os.path.join(base_dir, entry)
                     if os.path.isdir(full_path):
-                        if entry == "cache_blobs" or not os.path.exists(os.path.join(full_path, "items_structured")):
+                        if entry == "cache_blobs" or not os.path.isdir(full_path):
+
                             continue
                         match = re.search(r"(\d+)$", entry)
                         kit_id = match.group(1) if match else entry
@@ -157,8 +158,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
-            structured_dir = safe_join(kit_path, "items_structured")
-            if not os.path.exists(structured_dir):
+            structured_dir = safe_join(kit_path, "")
+            if not os.path.exists(kit_path):
+
                 self.send_api_response(False, "Kit structure not found")
                 return
             separated_folders = []
@@ -326,7 +328,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
             
-            struct_base = safe_join(kit_path, "items_structured")
+            struct_base = safe_join(kit_path, "")
+
             merged_base = safe_join(kit_path, "items_merged")
             
             old_path = safe_join(struct_base, old_name)
@@ -517,7 +520,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Target structured folder
-            struct_base = safe_join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, folder_name)
+
             
             target_dir = struct_base
             is_subcolor = False
@@ -574,7 +578,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         if not any(f['name'] == p_file for f in file_list):
                              file_list.append({
                                 "name": p_file,
-                                "url": f"/downloads/{kit_folder}/items_structured/{folder_name}/{p_file}",
+                                "url": f"/downloads/{kit_folder}/{folder_name}/{p_file}",
                                 "is_image": True,
                                 "location": "Parent (Main)"
                             })
@@ -607,7 +611,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Determine directory
-            struct_base = safe_join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, folder_name)
+
             target_dir = struct_base
             if color and color != 'default':
                 target_dir = safe_join(struct_base, color)
@@ -647,7 +652,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
-            struct_base = safe_join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, folder_name)
+
             
             # Simple resolution:
             path_primary = safe_join(struct_base, color if color and color != 'default' else "", filename)
@@ -681,7 +687,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
-            struct_base = safe_join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, folder_name)
+
             
             # Path Logic
             path_primary = safe_join(struct_base, color if color and color != 'default' else "", old_name)
@@ -735,7 +742,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
-            structured_dir = safe_join(kit_path, "items_structured", folder_name)
+            structured_dir = safe_join(kit_path, folder_name)
+
 
             if not os.path.exists(structured_dir):
                 self.send_api_response(False, "Folder not found")
@@ -951,7 +959,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
-            target_dir = os.path.join(base_path, "downloads", kit_folder, "items_structured", folder_name)
+            target_dir = os.path.join(base_path, "downloads", kit_folder, folder_name)
+
 
             if not os.path.exists(target_dir):
                 self.send_api_response(False, "Folder not found")
@@ -1037,7 +1046,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = os.path.join(base_path, "downloads", kit_folder)
-            target_dir = os.path.join(kit_path, "items_structured", folder_name)
+            target_dir = os.path.join(kit_path, folder_name)
+
 
             if color and color != 'default':
                 target_dir = os.path.join(target_dir, color)
@@ -1128,13 +1138,31 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             from zip_neka_kit import zip_kit
             zip_path = zip_kit(kit_folder)
-            # Ensure zip_path is within project
-            base_path = os.path.dirname(os.path.abspath(__file__))
-            if not os.path.abspath(zip_path).startswith(base_path):
-                 self.send_api_response(False, "Invalid zip archive path")
+            
+            if not zip_path or not os.path.exists(zip_path):
+                 self.send_api_response(False, "Failed to create zip archive")
                  return
+
+            # Read the zip file content
+            with open(zip_path, 'rb') as f:
+                zip_data = f.read()
+
+            # Send binary response
+            self.send_response(200)
+            self.send_header('Content-type', 'application/zip')
+            self.send_header('Content-Disposition', f'attachment; filename="{kit_folder}.zip"')
+            self.send_header('Content-Length', str(len(zip_data)))
+            self.end_headers()
+            self.wfile.write(zip_data)
+            
+            # Optional: Remove zip from server after sending to save space
+            # os.remove(zip_path)
+
         except Exception as e:
-            self.send_api_response(False, f"Server Error: {str(e)}")
+            # If we already started sending headers, this might tail-fail, but usually okay for small zips
+            try: self.send_api_response(False, f"Server Error: {str(e)}")
+            except: pass
+
 
     def handle_rename_color_folder(self, data):
         kit_folder = data.get('kit')
@@ -1153,7 +1181,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(base_path, "downloads", kit_folder)
-            struct_base = safe_join(kit_path, "items_structured", part_folder)
+            struct_base = safe_join(kit_path, part_folder)
+
             
             old_path = safe_join(struct_base, old_color)
             new_path = safe_join(struct_base, new_color)
@@ -1190,7 +1219,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(base_path, "downloads", kit_folder)
             
             # Target structured folder
-            struct_base = safe_join(kit_path, "items_structured", folder_name)
+            struct_base = safe_join(kit_path, folder_name)
+
             
             # Target directory logic
             target_dir = struct_base
