@@ -168,6 +168,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         else:
             self.send_error(404, "Unknown API endpoint")
 
+   
+
+
+
     def handle_get_kits_list(self, data):
         try:
             base_dir = DATA_DIR
@@ -811,36 +815,62 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             offsets = data.get('offsets', {}) # Prioritize offsets from frontend
             local_offsets = {}
             try:
-                meta_path = os.path.join(kit_path, "metadata.json")
-                if os.path.exists(meta_path):
-                    with open(meta_path, 'r', encoding='utf-8') as f:
-                        meta = json.load(f)
-                        # Detect canvas size from metadata
-                        parts_data = meta.get('data', {}).get('parts', [])
-                        for p_item in parts_data:
-                            p_items = p_item.get('items', [])
-                            if p_items and p_items[0]:
-                                f_layer = p_items[0]
-                                if isinstance(f_layer, list): f_layer = f_layer[0]
-                                if isinstance(f_layer, dict) and 'crop' in f_layer:
-                                    c = f_layer['crop']
-                                    canvas_width = c.get('ow', canvas_width)
-                                    canvas_height = c.get('oh', canvas_height)
-                                    break
-
+                found_config = False
+                
+                # Check for p_config.json (Picrew)
+                p_config_path = os.path.join(kit_path, "p_config.json")
+                if os.path.exists(p_config_path):
+                    with open(p_config_path, 'r', encoding='utf-8') as f:
+                        p_conf = json.load(f)
+                        if 'w' in p_conf and 'h' in p_conf:
+                            canvas_width = int(p_conf['w'])
+                            canvas_height = int(p_conf['h'])
+                        
                         match = re.search(r"-(\d+)$", folder_name)
                         if match:
-                            part_idx = int(match.group(1)) - 1
-                            if 0 <= part_idx < len(parts_data):
-                                items = parts_data[part_idx].get('items', [])
-                                for idx, item_layers in enumerate(items):
-                                   if not isinstance(item_layers, list): item_layers = [item_layers]
-                                   if not item_layers: continue
-                                   first_layer = item_layers[0]
-                                   crop = first_layer.get('crop', {})
-                                   local_offsets[f"{idx + 1}.png"] = {"x": crop.get('x', 0), "y": crop.get('y', 0)}
+                            p_idx = int(match.group(1)) - 1
+                            p_list = p_conf.get('pList', [])
+                            if 0 <= p_idx < len(p_list):
+                                part = p_list[p_idx]
+                                part_x = part.get('x', 0)
+                                part_y = part.get('y', 0)
+                                items = part.get('items', [])
+                                for idx, _ in enumerate(items):
+                                   local_offsets[f"{idx + 1}.png"] = {"x": part_x, "y": part_y}
+                                found_config = True
+
+                # Fallback to metadata.json (Neka)
+                if not found_config:
+                    meta_path = os.path.join(kit_path, "metadata.json")
+                    if os.path.exists(meta_path):
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                            # Detect canvas size from metadata
+                            parts_data = meta.get('data', {}).get('parts', [])
+                            for p_item in parts_data:
+                                p_items = p_item.get('items', [])
+                                if p_items and p_items[0]:
+                                    f_layer = p_items[0]
+                                    if isinstance(f_layer, list): f_layer = f_layer[0]
+                                    if isinstance(f_layer, dict) and 'crop' in f_layer:
+                                        c = f_layer['crop']
+                                        canvas_width = c.get('ow', canvas_width)
+                                        canvas_height = c.get('oh', canvas_height)
+                                        break
+
+                            match = re.search(r"-(\d+)$", folder_name)
+                            if match:
+                                part_idx = int(match.group(1)) - 1
+                                if 0 <= part_idx < len(parts_data):
+                                    items = parts_data[part_idx].get('items', [])
+                                    for idx, item_layers in enumerate(items):
+                                       if not isinstance(item_layers, list): item_layers = [item_layers]
+                                       if not item_layers: continue
+                                       first_layer = item_layers[0]
+                                       crop = first_layer.get('crop', {})
+                                       local_offsets[f"{idx + 1}.png"] = {"x": crop.get('x', 0), "y": crop.get('y', 0)}
             except Exception as e:
-                print(f"[Merge] Metadata error: {e}")
+                print(f"[Merge] Metadata/Config error: {e}")
             
             # Merge: Frontend offsets win, then local detected ones
             for k, v in local_offsets.items():
@@ -1114,16 +1144,31 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             # Load metadata to find offsets
+            # Load metadata/config to find offsets
             offsets = {} # filename -> {x, y}
             try:
-                # 1. Identify part index from folder name
-                # Resolve alias first
-                # 1. Identify part index from folder name
-                # No alias resolution
-                
                 match = re.search(r"-(\d+)$", folder_name)
-                if match:
-                    part_idx = int(match.group(1)) - 1
+                part_idx = int(match.group(1)) - 1 if match else -1
+                
+                found_config = False
+                
+                # 1. p_config.json (Picrew)
+                p_config_path = os.path.join(kit_path, "p_config.json")
+                if os.path.exists(p_config_path) and part_idx >= 0:
+                     with open(p_config_path, 'r', encoding='utf-8') as f:
+                        p_conf = json.load(f)
+                        p_list = p_conf.get('pList', [])
+                        if 0 <= part_idx < len(p_list):
+                            part = p_list[part_idx]
+                            px = part.get('x', 0)
+                            py = part.get('y', 0)
+                            items = part.get('items', [])
+                            for idx, _ in enumerate(items):
+                                offsets[f"{idx + 1}.png"] = {"x": px, "y": py}
+                            found_config = True
+
+                # 2. metadata.json (Neka)
+                if not found_config and part_idx >= 0:
                     meta_path = os.path.join(kit_path, "metadata.json")
                     if os.path.exists(meta_path):
                         with open(meta_path, 'r', encoding='utf-8') as f:
@@ -1132,18 +1177,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             if 0 <= part_idx < len(parts):
                                 items = parts[part_idx].get('items', [])
                                 for idx, item_layers in enumerate(items):
-                                   # Ensure item_layers is a list
                                    if not isinstance(item_layers, list): item_layers = [item_layers]
                                    if not item_layers: continue
-                                   
-                                   # Get offset from first layer
                                    first_layer = item_layers[0]
                                    crop = first_layer.get('crop', {})
                                    x = crop.get('x', 0)
                                    y = crop.get('y', 0)
                                    offsets[f"{idx + 1}.png"] = {"x": x, "y": y}
             except Exception as e:
-                print(f"Metadata read error: {e}")
+                print(f"Metadata/Config read error: {e}")
 
             files = []
             for f in os.listdir(target_dir):
