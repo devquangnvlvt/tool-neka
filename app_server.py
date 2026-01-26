@@ -142,6 +142,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/rename_folder': self.handle_rename_folder,
             '/api/get_item_layers': self.handle_get_item_layers,
             '/api/create_thumb': self.handle_create_thumb,
+            '/api/auto_create_thumbs': self.handle_auto_create_thumbs,
+            '/api/delete_all_thumbs': self.handle_delete_all_thumbs,
             '/api/delete_file': self.handle_delete_file,
             '/api/rename_file': self.handle_rename_file,
             '/api/merge_layers': self.handle_merge_layers,
@@ -1430,6 +1432,124 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(False, f"Error deleting colors: {str(e)}")
 
 
+    def handle_auto_create_thumbs(self, data):
+        from PIL import Image
+        kit_folder = data.get('kit')
+        if not kit_folder or not validate_id(kit_folder):
+            return self.send_api_response(False, "Invalid kit parameter")
+        
+        kit_path = safe_join(DATA_DIR, kit_folder)
+        if not os.path.exists(kit_path):
+            return self.send_api_response(False, "Kit not found")
+        
+        results = {
+            "total_folders": 0,
+            "total_images": 0,
+            "created_thumbs": 0,
+            "skipped_thumbs": 0,
+            "details": []
+        }
+        
+        # Scan all folders X-Y
+        for entry in os.listdir(kit_path):
+            entry_path = os.path.join(kit_path, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            
+            # Check format X-Y
+            if not re.match(r"^\d+-\d+$", entry):
+                continue
+            
+            results["total_folders"] += 1
+            folder_created = 0
+            folder_skipped = 0
+            
+            # Find all image files number.png (recursively in subfolders)
+            # We want to map "1" -> "path/to/1.png"
+            # If multiple exist (different colors), we just pick the first one we find to make the thumb.
+            
+            found_images = {} # number -> full_path
+            
+            # Walk the directory
+            for root, dirs, files in os.walk(entry_path):
+                for filename in files:
+                    # Check for N.png
+                    match = re.match(r"^(\d+)\.png$", filename)
+                    if match:
+                        num = match.group(1)
+                        # If we haven't found a source for this number yet, record it
+                        # Prioritize root images? os.walk yields root first, so yes.
+                        if num not in found_images:
+                            found_images[num] = os.path.join(root, filename)
+
+            # Now process the found images
+            for num, source_path in found_images.items():
+                thumb_name = f"thumb_{num}.png"
+                thumb_path = os.path.join(entry_path, thumb_name)
+                
+                results["total_images"] += 1
+                
+                # Check if thumb exists
+                if os.path.exists(thumb_path):
+                    folder_skipped += 1
+                    results["skipped_thumbs"] += 1
+                    continue
+                
+                # Create thumbnail
+                try:
+                    with Image.open(source_path) as img:
+                        img.thumbnail((200, 200))
+                        img.save(thumb_path)
+                    folder_created += 1
+                    results["created_thumbs"] += 1
+                except Exception as e:
+                    print(f"Error creating thumb for {source_path}: {e}")
+            
+            if folder_created > 0 or folder_skipped > 0:
+                results["details"].append({
+                    "folder": entry,
+                    "created": folder_created,
+                    "skipped": folder_skipped
+                })
+        
+        return self.send_api_response(True, 
+            f"Đã tạo {results['created_thumbs']} thumbnail, bỏ qua {results['skipped_thumbs']} (đã có sẵn)",
+            {"stats": results})
+
+    def handle_delete_all_thumbs(self, data):
+        kit_folder = data.get('kit')
+        if not kit_folder or not validate_id(kit_folder):
+            return self.send_api_response(False, "Invalid kit parameter")
+        
+        kit_path = safe_join(DATA_DIR, kit_folder)
+        if not os.path.exists(kit_path):
+            return self.send_api_response(False, "Kit not found")
+        
+        deleted_count = 0
+        
+        # Scan all folders X-Y
+        for entry in os.listdir(kit_path):
+            entry_path = os.path.join(kit_path, entry)
+            if not os.path.isdir(entry_path):
+                continue
+            
+            # Check format X-Y
+            if not re.match(r"^\d+-\d+$", entry):
+                continue
+            
+            # Find all thumb_*.png files
+            thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
+            for filename in os.listdir(entry_path):
+                if thumb_pattern.match(filename):
+                    file_path = os.path.join(entry_path, filename)
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                    except Exception as e:
+                        print(f"Error deleting {filename}: {e}")
+        
+        return self.send_api_response(True, f"Đã xóa thành công {deleted_count} thumbnail.")
+
     def handle_upload_file(self, data):
         import base64
         kit_folder = data.get('kit')
@@ -1483,11 +1603,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_api_response(False, f"Upload error: {str(e)}")
 
-    def send_api_response(self, success, message):
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.end_headers()
-        self.wfile.write(json.dumps({"success": success, "message": message}).encode('utf-8'))
+
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
