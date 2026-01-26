@@ -130,6 +130,29 @@
                         `;
           }
 
+          // Gap In Images Warnings
+          let gapWarnings = [];
+          result.parts.forEach(p => {
+              if (p.missing_images && p.missing_images.length > 0) {
+                  gapWarnings.push(`Folder <strong>${p.folder}</strong> thiếu ảnh gốc: ${p.missing_images.join(", ")}`);
+              }
+              if (p.color_gaps) {
+                  Object.entries(p.color_gaps).forEach(([color, gaps]) => {
+                      gapWarnings.push(`Folder <strong>${p.folder}</strong> mẫu màu <strong style="color:#d63031;">${color}</strong> thiếu ảnh: ${gaps.join(", ")}`);
+                  });
+              }
+          });
+
+          if (gapWarnings.length > 0) {
+              warningHtml += `
+                  <div style="margin-top:10px; padding-top:10px; border-top:1px solid #ffe0b2;">
+                      <strong>🔴 LỖI NHẢY CÓC ẢNH (1, 2, 3...):</strong><br>
+                      ${gapWarnings.slice(0, 10).join("<br>")}
+                      ${gapWarnings.length > 10 ? `<br>... và ${gapWarnings.length - 10} lỗi khác.` : ""}
+                  </div>
+              `;
+          }
+
           if (warningHtml) {
             warningBox.style.display = "block";
             warningBox.innerHTML = warningHtml;
@@ -216,6 +239,18 @@
 
         navIcon.appendChild(img);
         navIcon.appendChild(label);
+        
+        // Highlight if has gaps (Red Dot)
+        // Lỗi ở root (missing_images) hoặc ở bất kỳ folder màu nào (color_gaps) đều hiện chấm đỏ ở x-y
+        if ((part.missing_images && part.missing_images.length > 0) || 
+            (part.color_gaps && Object.keys(part.color_gaps).length > 0)) {
+            const dot = document.createElement("div");
+            dot.className = "gap-badge";
+            dot.title = "Bộ phận này bị thiếu file ảnh (xem cảnh báo bên dưới)";
+            navIcon.appendChild(dot);
+            navIcon.style.borderColor = "#ff7675";
+        }
+
         navIcon.onclick = () => selectPart(index, part);
 
         navContainer.appendChild(navIcon);
@@ -359,7 +394,6 @@
         const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
         img.src = imagePath;
         img.onerror = () => {
-          console.log(`Thumbnail not found: ${imagePath}`);
           itemDiv.style.display = "none";
         };
 
@@ -459,6 +493,15 @@
           checkbox.onclick = (e) => e.stopPropagation();
           checkbox.title = "Chọn để xóa (D)";
           colorDiv.appendChild(checkbox);
+        }
+        
+        // Highlight color folder if it has gaps
+        if (part.color_gaps && part.color_gaps[colorFolder]) {
+            const dot = document.createElement("div");
+            dot.className = "gap-badge";
+            dot.title = `Thiếu ảnh: ${part.color_gaps[colorFolder].join(", ")}`;
+            colorDiv.appendChild(dot);
+            colorDiv.style.borderColor = "#ff7675";
         }
 
         colorGrid.appendChild(colorDiv);

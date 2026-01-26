@@ -226,65 +226,117 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     with open(sep_layers_path, 'r', encoding='utf-8') as f:
                         separated_folders = json.load(f)
                 except: pass
+            # Load metadata ONCE at the beginning
+            meta_data = {}
+            meta_path = os.path.join(kit_path, "metadata.json")
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta_data = json.load(f)
+                except Exception as e:
+                    print(f"Error loading metadata: {e}")
+
             parts = []
             for entry in os.listdir(structured_dir):
                 entry_path = os.path.join(structured_dir, entry)
                 if not os.path.isdir(entry_path): continue
                 
-                # No alias resolution needed
-                # real_name, is_aliased = self.resolve_real_folder_name(kit_path, entry)
-                
                 match = re.match(r"^(\d+)-(\d+)$", entry)
                 
-                # If not X-Y even after alias resolution, put it at end
                 if not match:
                     x, y = 9999, 9999
                 else:
                     x = int(match.group(1))
                     y = int(match.group(2))
                     
-                item_indices = []
-                thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
-                for f in os.listdir(entry_path):
-                    m = thumb_pattern.match(f)
-                    if m: item_indices.append(int(m.group(1)))
-                num_items = max(item_indices) if item_indices else 0
-                colors = []
-                for sub in os.listdir(entry_path):
-                    if os.path.isdir(os.path.join(entry_path, sub)):
-                        colors.append(sub)
-                
-                # Count layers per item from metadata
+                # Count layers and items per item from metadata
                 item_layer_counts = {}
+                expected_num_items = 0
                 try:
                     match_y = re.match(r"^\d+-(\d+)$", entry)
                     if match_y:
-                        part_idx = int(match_y.group(1)) - 1
-                        meta_path = os.path.join(kit_path, "metadata.json")
-                        if os.path.exists(meta_path):
-                            with open(meta_path, 'r', encoding='utf-8') as f:
-                                meta = json.load(f)
-                                parts_data = meta.get('data', {}).get('parts', [])
-                                if 0 <= part_idx < len(parts_data):
-                                    items = parts_data[part_idx].get('items', [])
-                                    for item_idx, item_layers in enumerate(items):
-                                        if not isinstance(item_layers, list): item_layers = [item_layers]
-                                        layer_count = 0
-                                        for layer in item_layers:
-                                            if isinstance(layer, dict):
-                                                if layer.get('blob'): layer_count += 1
-                                                addon_textures = layer.get('addonTextures', [])
-                                                layer_count += len(addon_textures)
-                                        item_layer_counts[item_idx + 1] = layer_count
+                        part_idx_for_meta = int(match_y.group(1)) - 1
+                        parts_data = meta_data.get('data', {}).get('parts', [])
+                        if 0 <= part_idx_for_meta < len(parts_data):
+                            items_meta = parts_data[part_idx_for_meta].get('items', [])
+                            expected_num_items = len(items_meta)
+                            for im_idx, item_layers in enumerate(items_meta):
+                                if not isinstance(item_layers, list): item_layers = [item_layers]
+                                l_count = 0
+                                for layer in item_layers:
+                                    if isinstance(layer, dict):
+                                        if layer.get('blob'): l_count += 1
+                                        addon_textures = layer.get('addonTextures', [])
+                                        l_count += len(addon_textures)
+                                item_layer_counts[im_idx + 1] = l_count
                 except Exception as e:
-                    print(f"Error reading layer counts for {entry}: {e}")
+                    print(f"Error processing metadata for {entry}: {e}")
+
+                item_indices = []
+                image_indices = [] # Indices of N.png in main folder
+                thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
+                image_pattern = re.compile(r"^(\d+)\.png$")
                 
+                # Use os.scandir for better performance on network drives
+                colors = []
+                try:
+                    with os.scandir(entry_path) as it:
+                        for entry_file in it:
+                            if entry_file.is_file():
+                                fname = entry_file.name
+                                m_thumb = thumb_pattern.match(fname)
+                                if m_thumb: item_indices.append(int(m_thumb.group(1)))
+                                m_img = image_pattern.match(fname)
+                                if m_img: image_indices.append(int(m_img.group(1)))
+                            elif entry_file.is_dir():
+                                colors.append(entry_file.name)
+                except Exception as e:
+                    print(f"Error scanning directory {entry_path}: {e}")
+
+                # Use max of (existing files, expected from metadata)
+                num_items = max(expected_num_items, max(image_indices) if image_indices else 0, max(item_indices) if item_indices else 0)
+                
+                # Check for gaps in N.png (main folder)
+                missing_images = []
+                if not colors and image_indices:
+                    max_img = max(image_indices)
+                    for i in range(1, max_img + 1):
+                        if i not in image_indices:
+                            missing_images.append(i)
+
+                color_gaps = {} # color_name -> missing_indices
+                if colors:
+                    for sub in colors:
+                        sub_path = os.path.join(entry_path, sub)
+                        sub_indices = []
+                        try:
+                            with os.scandir(sub_path) as sit:
+                                for sf_entry in sit:
+                                    if sf_entry.is_file():
+                                        sm = image_pattern.match(sf_entry.name)
+                                        if sm: sub_indices.append(int(sm.group(1)))
+                        except: pass
+                        
+                        if sub_indices:
+                            gaps = []
+                            max_sub = max(sub_indices)
+                            for i in range(1, max_sub + 1):
+                                if i not in sub_indices:
+                                    gaps.append(i)
+                            if gaps:
+                                color_gaps[sub] = gaps
+                
+                if missing_images or color_gaps:
+                    print(f"  [GAP DETECTED] Folder {entry}: missing_images={missing_images}, color_gaps={list(color_gaps.keys())}")
+
                 parts.append({
                     "x": x, "y": y, "folder": entry,
                     "items_count": num_items, "colors": colors,
                     "is_separated": entry in separated_folders,
                     "item_layer_counts": item_layer_counts,
-                    "has_colors": len(colors) > 0
+                    "has_colors": len(colors) > 0,
+                    "missing_images": missing_images,
+                    "color_gaps": color_gaps
                 })
 
             # Check for duplicate X values
