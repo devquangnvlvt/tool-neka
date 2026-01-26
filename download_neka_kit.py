@@ -6,6 +6,7 @@ import requests
 import shutil
 from PIL import Image
 import numpy as np
+import tempfile
 from config import DATA_DIR
 
 
@@ -305,10 +306,26 @@ def get_color_code_from_filter(filter_data):
         
     return main_color.replace('#', '').upper()
 
-def reorganize_kit(metadata_path, selected_y=None):
+def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
     print(f"DEBUG: reorganize_kit called with {metadata_path}, selected_y={selected_y}")
     base_dir = os.path.dirname(metadata_path)
-    
+
+    def update_progress(current, total, msg):
+        if not kit_id: return
+        temp_dir = tempfile.gettempdir()
+        progress_file = os.path.join(temp_dir, f"progress_{kit_id}.json")
+        try:
+            with open(progress_file, 'w', encoding='utf-8') as pf:
+                json.dump({
+                    "current": current,
+                    "total": total,
+                    "percentage": int((current / total) * 100) if total > 0 else 0,
+                    "message": msg,
+                    "status": "processing"
+                }, pf)
+        except Exception as e:
+            print(f"Error writing progress: {e}")
+
     with open(metadata_path, 'r', encoding='utf-8') as f:
         kit = json.load(f)
         
@@ -392,6 +409,10 @@ def reorganize_kit(metadata_path, selected_y=None):
             continue
         
         nav_position = part_idx + 1  # Y index
+        
+        # Report progress
+        update_progress(part_idx + 1, len(parts), f"Đang xử lý phần: {part.get('name', 'Part ' + str(nav_position))}")
+
         if selected_y is not None and nav_position not in selected_y:
             continue
 
@@ -641,6 +662,7 @@ def reorganize_kit(metadata_path, selected_y=None):
 
 
 
+    update_progress(len(parts), len(parts), "Hoàn tất!")
     print(f"Done! Created {total_files} colored files in '{base_dir}'.")
 
 
@@ -725,7 +747,7 @@ if __name__ == "__main__":
                 print(f"Invalid input format: {e}. Downloading ALL.")
                 selected_y = None
 
-    reorganize_kit(final_metadata_path, selected_y=selected_y)
+    reorganize_kit(final_metadata_path, selected_y=selected_y, kit_id=kit_id)
     
     print(f"\n✓ Complete! Check: {base_dir}/")
 

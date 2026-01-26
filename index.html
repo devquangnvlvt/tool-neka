@@ -16,33 +16,134 @@
             padding: 10px;
             font-size: 16px;
         }
+
+        #progressContainer {
+            display: none;
+            margin: 20px auto;
+            width: 400px;
+        }
+
+        #progressBar {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        #progressFill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50, #8BC34A);
+            width: 0%;
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        #progressText {
+            font-size: 14px;
+            color: #555;
+        }
     </style>
 </head>
 
 <body>
     <h2>Tải Neka</h2>
     <input id="kitId" placeholder="Nhập ID Neka" />
-    <button onclick="download()">Tải về</button>
+    <button id="downloadBtn" onclick="download()">Tải về</button>
+
+    <div id="progressContainer">
+        <div id="progressBar">
+            <div id="progressFill">0%</div>
+        </div>
+        <div id="progressText">Đang khởi tạo...</div>
+    </div>
 
     <script>
+        let progressInterval = null;
+
+        async function checkProgress(id) {
+            try {
+                const res = await fetch('/api/check_progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+                const data = await res.json();
+
+                if (data.success && data.progress) {
+                    const { percentage, message } = data.progress;
+                    document.getElementById('progressFill').style.width = percentage + '%';
+                    document.getElementById('progressFill').textContent = percentage + '%';
+                    document.getElementById('progressText').textContent = message || 'Đang xử lý...';
+                }
+            } catch (e) {
+                console.log('Progress check error:', e);
+            }
+        }
+
         async function download() {
             const id = document.getElementById('kitId').value.trim();
             if (!id) return alert("Nhập ID!");
-            const res = await fetch('/api/download_kit', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ id })
-            });
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `neka_${id}.zip`;
-                a.click();
-                URL.revokeObjectURL(url);
-            } else {
-                alert("Lỗi tải kit!");
+
+            // Disable button and show progress
+            const btn = document.getElementById('downloadBtn');
+            btn.disabled = true;
+            btn.textContent = 'Đang tải...';
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('progressFill').style.width = '0%';
+            document.getElementById('progressFill').textContent = '0%';
+            document.getElementById('progressText').textContent = 'Đang khởi tạo...';
+
+            // Start polling progress
+            progressInterval = setInterval(() => checkProgress(id), 2000);
+
+            try {
+                const res = await fetch('/api/download_kit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id })
+                });
+
+                // Stop polling
+                clearInterval(progressInterval);
+
+                if (res.ok) {
+                    // Update to 100%
+                    document.getElementById('progressFill').style.width = '100%';
+                    document.getElementById('progressFill').textContent = '100%';
+                    document.getElementById('progressText').textContent = 'Hoàn tất! Đang tải xuống...';
+
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `neka_${id}.zip`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+
+                    // Reset UI after 2 seconds
+                    setTimeout(() => {
+                        document.getElementById('progressContainer').style.display = 'none';
+                        btn.disabled = false;
+                        btn.textContent = 'Tải về';
+                    }, 2000);
+                } else {
+                    alert("Lỗi tải kit!");
+                    document.getElementById('progressContainer').style.display = 'none';
+                    btn.disabled = false;
+                    btn.textContent = 'Tải về';
+                }
+            } catch (error) {
+                clearInterval(progressInterval);
+                alert("Lỗi kết nối: " + error.message);
+                document.getElementById('progressContainer').style.display = 'none';
+                btn.disabled = false;
+                btn.textContent = 'Tải về';
             }
         }
     </script>

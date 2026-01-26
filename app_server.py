@@ -6,6 +6,7 @@ import shutil
 import zipfile
 import subprocess
 import re
+import tempfile
 from urllib.parse import urlparse, parse_qs
 import mimetypes
 from config import DATA_DIR
@@ -153,7 +154,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/upload_file': self.handle_upload_file,
             '/api/rename_color_folder': self.handle_rename_color_folder,
             '/api/delete_color_folders': self.handle_delete_color_folders,
-             '/api/download_kit': self.handle_download_kit,
+            '/api/download_kit': self.handle_download_kit,
+            '/api/check_progress': self.handle_check_progress,
         }
 
 
@@ -1269,6 +1271,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 return
 
             try:
+                # Cleanup old progress
+                temp_dir = tempfile.gettempdir()
+                progress_file = os.path.join(temp_dir, f"progress_{kit_id}.json")
+                if os.path.exists(progress_file):
+                    os.remove(progress_file)
+
                 # Gọi script download_neka_kit.py
                 subprocess.run(['python', 'download_neka_kit.py', str(kit_id)], check=True)
 
@@ -1298,6 +1306,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header('Content-Length', str(len(zip_data)))
                 self.end_headers()
                 self.wfile.write(zip_data)
+
+                # Cleanup progress file after successful download
+                temp_dir = tempfile.gettempdir()
+                progress_file = os.path.join(temp_dir, f"progress_{kit_id}.json")
+                if os.path.exists(progress_file):
+                    try:
+                        os.remove(progress_file)
+                    except:
+                        pass
 
                 # Tùy chọn: xóa zip sau khi gửi để tiết kiệm dung lượng
                 # os.remove(zip_path)
@@ -1345,6 +1362,29 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, f"Error renaming color: {str(e)}")
+
+    
+    def handle_check_progress(self, data):
+        kit_id = data.get('id')
+        if not kit_id:
+            self.send_api_response(False, "Missing id")
+            return
+        
+        temp_dir = tempfile.gettempdir()
+        progress_file = os.path.join(temp_dir, f"progress_{kit_id}.json")
+        if os.path.exists(progress_file):
+            try:
+                with open(progress_file, 'r', encoding='utf-8') as f:
+                     prog_data = json.load(f)
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"success": True, "progress": prog_data}).encode('utf-8'))
+            except:
+                self.send_api_response(False, "Error reading progress")
+        else:
+             self.send_api_response(False, "No progress data yet")
+
 
     def handle_delete_color_folders(self, data):
         kit_folder = data.get('kit')
