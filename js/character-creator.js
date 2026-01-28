@@ -1682,7 +1682,10 @@
 
         const div = document.createElement("div");
         div.className = "item-option";
-        div.innerHTML = `<img src="${baseUrl}${filename}?v=${imgVers}" title="${filename}">`;
+        div.innerHTML = `
+            <img src="${baseUrl}${filename}?v=${imgVers}" title="${filename}">
+            <div style="font-size: 10px; color: #666; word-break: break-all; margin-top: 2px; text-align: center;">${filename}</div>
+        `;
         div.onclick = () => addToStack(file);
         grid.appendChild(div);
       });
