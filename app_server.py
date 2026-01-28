@@ -158,6 +158,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/delete_color_folders': self.handle_delete_color_folders,
             '/api/download_kit': self.handle_download_kit,
             '/api/check_progress': self.handle_check_progress,
+            '/api/create_nav': self.handle_create_nav,
         }
 
 
@@ -750,6 +751,43 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
              self.send_api_response(False, f"Error creating thumbnail: {str(e)}")
+
+    def handle_create_nav(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+
+        if not kit_folder or not folder_name:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, folder_name)
+            
+            source_path = safe_join(part_path, "1.png")
+            target_path = safe_join(part_path, "nav.png")
+
+            # Nếu không thấy 1.png ở root, thử tìm ở folder màu đầu tiên (nếu có)
+            if not os.path.exists(source_path):
+                for entry in os.listdir(part_path):
+                    sub_path = os.path.join(part_path, entry)
+                    if os.path.isdir(sub_path):
+                        test_path = os.path.join(sub_path, "1.png")
+                        if os.path.exists(test_path):
+                            source_path = test_path
+                            break
+
+            if not os.path.exists(source_path):
+                self.send_api_response(False, "Không tìm thấy file 1.png để làm nav")
+                return
+            
+            # Copy 1.png to nav.png
+            shutil.copy2(source_path, target_path)
+            
+            self.send_api_response(True, f"Đã tạo nav.png từ 1.png")
+
+        except Exception as e:
+            self.send_api_response(False, f"Lỗi khi tạo nav: {str(e)}")
 
     def handle_delete_file(self, data):
         kit_folder = data.get('kit')

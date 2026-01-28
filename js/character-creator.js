@@ -350,6 +350,7 @@
       // Show thumb control buttons
       document.getElementById("create-part-thumb-btn").style.display = "block";
       document.getElementById("delete-part-thumb-btn").style.display = "block";
+      document.getElementById("create-part-nav-btn").style.display = "block";
 
       // Don't auto-select item - respect current selection or None
       // If this part has a layer, it will be restored by loadItems
@@ -2339,6 +2340,53 @@ function toggleMergeBackground() {
         if (result.success) {
           alert(`✅ Đã xóa xong thumbnail của "${folderName}".`);
           loadItems(currentPart.part); // Refresh item grid
+        } else {
+          alert("❌ Lỗi: " + result.message);
+        }
+      } catch (error) {
+        hideGlobalLoading();
+        alert("❌ Lỗi kết nối: " + error.message);
+      }
+    }
+
+    // Create nav.png for current part from 1.png
+    async function createPartNav() {
+      if (!CURRENT_KIT_FOLDER || !currentPart) {
+        alert("Vui lòng chọn bộ phận trước!");
+        return;
+      }
+
+      const folderName = currentPart.part.folder;
+
+      if (!confirm(`Tạo nav.png cho bộ phận "${folderName}" từ file 1.png?`)) {
+        return;
+      }
+
+      showGlobalLoading(`Đang tạo nav.png cho ${folderName}...`);
+
+      try {
+        const response = await fetch("/api/create_nav", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            kit: CURRENT_KIT_FOLDER,
+            folder: folderName
+          })
+        });
+
+        const result = await response.json();
+        hideGlobalLoading();
+
+        if (result.success) {
+          alert(`✅ Hoàn tất: ${result.message}`);
+          
+          // Update the nav icon image in the UI
+          imgVers = Date.now();
+          const navIconImg = document.querySelector(`[data-part-index="${currentPart.index}"] img`);
+          if (navIconImg) {
+            navIconImg.src = `${KIT_PATH}${folderName}/nav.png?v=${imgVers}`;
+            navIconImg.style.display = "block";
+          }
         } else {
           alert("❌ Lỗi: " + result.message);
         }
