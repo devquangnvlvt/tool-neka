@@ -86,7 +86,7 @@
                   padding: 5px 10px;
                   font-size: 12px;
                 " onclick="autoCreateThumbs()">
-                Tạo Thumb Tự Động
+                Tạo Thumb Tự Động toàn bộ folder
               </button>
               <button class="btn" style="
                   background: #e74c3c;
@@ -95,7 +95,7 @@
                   font-size: 12px;
                   margin-left: 5px;
                 " onclick="deleteAllThumbs()">
-                Xóa Tất Cả Thumb
+                Xóa Tất Cả Thumb toàn bộ folder
               </button>
             </div>
           </div>
@@ -147,6 +147,24 @@
                   " onclick="promptDeletePart()">
                 Xóa layer
               </button>
+              <button id="create-part-thumb-btn" class="btn" style="
+                    background: #3498db;
+                    color: white;
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    display: none;
+                  " onclick="createPartThumbs()">
+                Tạo Thumb
+              </button>
+              <button id="delete-part-thumb-btn" class="btn" style="
+                    background: #e74c3c;
+                    color: white;
+                    padding: 5px 10px;
+                    font-size: 12px;
+                    display: none;
+                  " onclick="deletePartThumbs()">
+                Xóa Thumb
+              </button>
             </div>
           </div>
           <div class="item-grid" id="item-grid"></div>
@@ -162,7 +180,7 @@
     </div>
   </div>
 
-  
+
 
   <!-- Merge Modal Workspace -->
   <div id="merge-modal-overlay" class="modal-overlay">
@@ -288,7 +306,7 @@
     </div>
   </div>
   <!-- Script for Background Toggle -->
-  
+
   <!-- File Debug Modal -->
   <div id="file-debug-modal" class="modal-overlay" style="display: none; align-items: flex-start; padding-top: 50px">
     <div class="modal-content" style="width: 95%; max-height: 90vh; overflow-y: auto">
@@ -335,7 +353,7 @@
     <div class="spinner"></div>
     <p id="global-loading-message">Đang xử lý...</p>
   </div>
-<script src="js/character-creator.js"></script>
+  <script src="js/character-creator.js"></script>
 </body>
 
 </html>

@@ -1502,15 +1502,23 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             "details": []
         }
         
-        # Scan all folders X-Y
-        for entry in os.listdir(kit_path):
+        # Scan folders
+        folders_to_scan = []
+        target_folder = data.get('folder')
+        
+        if target_folder:
+            if os.path.isdir(os.path.join(kit_path, target_folder)):
+                folders_to_scan.append(target_folder)
+            else:
+                return self.send_api_response(False, f"Folder {target_folder} not found in kit")
+        else:
+            # Original logic: Scan all folders X-Y
+            for entry in os.listdir(kit_path):
+                if re.match(r"^\d+-\d+$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
+                    folders_to_scan.append(entry)
+        
+        for entry in folders_to_scan:
             entry_path = os.path.join(kit_path, entry)
-            if not os.path.isdir(entry_path):
-                continue
-            
-            # Check format X-Y
-            if not re.match(r"^\d+-\d+$", entry):
-                continue
             
             results["total_folders"] += 1
             folder_created = 0
@@ -1579,15 +1587,23 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         
         deleted_count = 0
         
-        # Scan all folders X-Y
-        for entry in os.listdir(kit_path):
+        # Scan folders to delete thumbs
+        folders_to_scan = []
+        target_folder = data.get('folder')
+        
+        if target_folder:
+            if os.path.isdir(os.path.join(kit_path, target_folder)):
+                folders_to_scan.append(target_folder)
+            else:
+                return self.send_api_response(False, f"Folder {target_folder} not found in kit")
+        else:
+            # Original logic: Scan all folders X-Y
+            for entry in os.listdir(kit_path):
+                if re.match(r"^\d+-\d+$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
+                    folders_to_scan.append(entry)
+        
+        for entry in folders_to_scan:
             entry_path = os.path.join(kit_path, entry)
-            if not os.path.isdir(entry_path):
-                continue
-            
-            # Check format X-Y
-            if not re.match(r"^\d+-\d+$", entry):
-                continue
             
             # Find all thumb_*.png files
             thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")

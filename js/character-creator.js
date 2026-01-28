@@ -347,6 +347,10 @@
         flattenBtn.style.display = "none";
       }
 
+      // Show thumb control buttons
+      document.getElementById("create-part-thumb-btn").style.display = "block";
+      document.getElementById("delete-part-thumb-btn").style.display = "block";
+
       // Don't auto-select item - respect current selection or None
       // If this part has a layer, it will be restored by loadItems
       currentItem = characterLayers[index]
@@ -2259,4 +2263,84 @@ function toggleMergeBackground() {
     function hideGlobalLoading() {
       const overlay = document.getElementById('global-loading-overlay');
       if (overlay) overlay.style.display = 'none';
+    }
+
+    // Create thumbs for current part
+    async function createPartThumbs() {
+      if (!CURRENT_KIT_FOLDER || !currentPart) {
+        alert("Vui lòng chọn bộ phận trước!");
+        return;
+      }
+
+      const folderName = currentPart.part.folder;
+
+      if (!confirm(`Tạo thumbnail tự động cho bộ phận "${folderName}"?\n\nChỉ tạo thumb cho file chưa có.`)) {
+        return;
+      }
+
+      showGlobalLoading(`Đang tạo thumbnail cho ${folderName}...`);
+
+      try {
+        const response = await fetch("/api/auto_create_thumbs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            kit: CURRENT_KIT_FOLDER,
+            folder: folderName
+          })
+        });
+
+        const result = await response.json();
+        hideGlobalLoading();
+
+        if (result.success) {
+          alert(`✅ Hoàn tất!\n\n✨ Đã tạo thêm: ${result.stats.created_thumbs} thumb.`);
+          loadItems(currentPart.part); // Refresh item grid
+        } else {
+          alert("❌ Lỗi: " + result.message);
+        }
+      } catch (error) {
+        hideGlobalLoading();
+        alert("❌ Lỗi kết nối: " + error.message);
+      }
+    }
+
+    // Delete thumbs for current part
+    async function deletePartThumbs() {
+      if (!CURRENT_KIT_FOLDER || !currentPart) {
+        alert("Vui lòng chọn bộ phận trước!");
+        return;
+      }
+
+      const folderName = currentPart.part.folder;
+
+      if (!confirm(`⚠️ CẢNH BÁO: Xóa TẤT CẢ thumbnail trong bộ phận "${folderName}"?`)) {
+        return;
+      }
+
+      showGlobalLoading(`Đang xóa thumbnail của ${folderName}...`);
+
+      try {
+        const response = await fetch("/api/delete_all_thumbs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            kit: CURRENT_KIT_FOLDER,
+            folder: folderName
+          })
+        });
+
+        const result = await response.json();
+        hideGlobalLoading();
+
+        if (result.success) {
+          alert(`✅ Đã xóa xong thumbnail của "${folderName}".`);
+          loadItems(currentPart.part); // Refresh item grid
+        } else {
+          alert("❌ Lỗi: " + result.message);
+        }
+      } catch (error) {
+        hideGlobalLoading();
+        alert("❌ Lỗi kết nối: " + error.message);
+      }
     }
