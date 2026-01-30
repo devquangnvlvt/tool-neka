@@ -113,6 +113,9 @@ def apply_gradient(image_path, lut, output_path):
         print(f"Error coloring {image_path}: {e}")
         shutil.copy2(image_path, output_path)
 
+
+
+
 # ============= DECOMPRESSION FUNCTIONS =============
 
 def decode_b62_full(s):
@@ -294,16 +297,86 @@ def process_blob_task(task):
 # ============= REORGANIZE KIT =============
 
 def get_color_code_from_filter(filter_data):
+    """
+    Lấy mã màu chủ đạo từ gradient filter.
+    
+    Ưu tiên:
+    1. Màu có offset = 0 (màu cơ bản)
+    2. Màu sáng nhất không phải trắng/đen/xám
+    3. Fallback: màu đầu tiên
+    """
     if not isinstance(filter_data, dict):
         return "default"
     gradients = filter_data.get('gradients', [])
-    if not gradients: return "default"
+    if not gradients: 
+        return "default"
     
-    # Try to find a meaningful color from the gradient
+    def is_neutral_color(hex_color):
+        """Kiểm tra xem có phải màu trung tính (trắng/đen/xám) không"""
+        hex_color = hex_color.replace('#', '').upper()
+        if len(hex_color) != 6:
+            return True
+        
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            
+            # Kiểm tra gần trắng (> 250)
+            if r > 250 and g > 250 and b > 250:
+                return True
+            
+            # Kiểm tra gần đen (< 5)
+            if r < 5 and g < 5 and b < 5:
+                return True
+            
+            # Kiểm tra xám (R≈G≈B và độ sáng 20-80%)
+            avg = (r + g + b) / 3
+            if abs(r - avg) < 15 and abs(g - avg) < 15 and abs(b - avg) < 15:
+                if 50 < avg < 200:
+                    return True
+            
+            return False
+        except:
+            return True
+    
+    def get_brightness(hex_color):
+        """Tính độ sáng của màu (0-255)"""
+        hex_color = hex_color.replace('#', '')
+        try:
+            r = int(hex_color[0:2], 16)
+            g = int(hex_color[2:4], 16)
+            b = int(hex_color[4:6], 16)
+            return (r + g + b) / 3
+        except:
+            return 0
+    
+    # Ưu tiên 1: Tìm màu có offset = 0
+    for grad in gradients:
+        color = grad.get('color', '')
+        offset = grad.get('offset', '')
+        
+        if offset == 0 or offset == '0':
+            if not is_neutral_color(color):
+                return color.replace('#', '').upper()
+    
+    # Ưu tiên 2: Tìm màu sáng nhất không phải trung tính
+    valid_colors = []
+    for grad in gradients:
+        color = grad.get('color', '')
+        if color and not is_neutral_color(color):
+            valid_colors.append(color)
+    
+    if valid_colors:
+        # Sắp xếp theo độ sáng giảm dần
+        valid_colors.sort(key=get_brightness, reverse=True)
+        return valid_colors[0].replace('#', '').upper()
+    
+    # Fallback: Logic cũ
     main_color = gradients[0].get('color', '000000')
     if len(gradients) > 1 and main_color.lower() in ['#ffffff', '#000000']:
         main_color = gradients[-1].get('color', '000000')
-        
+    
     return main_color.replace('#', '').upper()
 
 def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
@@ -576,6 +649,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
             
             for item_idx, item_layers in enumerate(items):
                 if not isinstance(item_layers, list): item_layers = [item_layers]
+
                 
                 # Combine main layers with addonTextures and addonLayers (if simple)
                 all_blobs_to_process = []
@@ -629,6 +703,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                     if os.path.exists(filepath):
                         # Even if file exists, we MUST increment the counter to avoid skipping subsequent colors/items
                         file_counter += 1
+
                         continue
                         
                     url = f"https://img2.neka.cc/{blob}"
@@ -651,6 +726,8 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                             apply_gradient(cache_path, current_lut, filepath)
                         else:
                             shutil.copy2(cache_path, filepath)
+                        
+
                             
                         total_files += 1
                         file_counter += 1
@@ -659,6 +736,9 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                         print(f"  Error handling blob {blob}: {e}")
 
                 # Merge logic was removed per user request
+
+
+
 
 
 
