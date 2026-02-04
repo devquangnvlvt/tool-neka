@@ -36,23 +36,26 @@
           kits = result.kits;
 
           if (kits.length > 0) {
-            // Auto-select the first kit
-            const firstKit = kits[0];
-            CURRENT_KIT_FOLDER = firstKit.folder;
+            // Check localStorage for saved kit
+            const savedKit = localStorage.getItem("selectedKit");
+            const kitToSelect = (savedKit && kits.find(k => k.folder === savedKit)) 
+              ? kits.find(k => k.folder === savedKit) 
+              : kits[0];
+
+            CURRENT_KIT_FOLDER = kitToSelect.folder;
             KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
 
+            const selector = document.getElementById("kit-selector");
+            selector.innerHTML = "";
+
+            kits.forEach((kit) => {
+              const option = document.createElement("option");
+              option.value = kit.folder;
+              option.textContent = kit.name;
+              if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
+              selector.appendChild(option);
+            });
           }
-
-          const selector = document.getElementById("kit-selector");
-          selector.innerHTML = "";
-
-          kits.forEach((kit) => {
-            const option = document.createElement("option");
-            option.value = kit.folder;
-            option.textContent = kit.name;
-            if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
-            selector.appendChild(option);
-          });
 
           loadKitStructure();
         } else {
@@ -69,6 +72,9 @@
 
       CURRENT_KIT_FOLDER = folderName;
       KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
+      
+      // Save to localStorage
+      localStorage.setItem("selectedKit", folderName);
 
 
       // Clear current kit structure to trigger fresh load
@@ -84,6 +90,7 @@
     // Load kit structure from folder API
     async function loadKitStructure(preserveSelection = false) {
       try {
+        showGlobalLoading("Đang tải bộ sưu tập...");
         const response = await fetch("/api/get_kit_structure", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -195,10 +202,13 @@
           }
 
           initializeApp(preserveSelection);
+          hideGlobalLoading();
         } else {
+          hideGlobalLoading();
           console.error("Error loading kit structure:", result.message);
         }
       } catch (error) {
+        hideGlobalLoading();
         console.error("Error loading kit structure:", error);
       }
     }
@@ -231,6 +241,7 @@
         const img = document.createElement("img");
         img.src = `${KIT_PATH}${part.folder}/nav.png?v=${imgVers}`;
         img.alt = part.folder;
+        img.loading = "lazy";
         img.onerror = () => (img.style.display = "none");
 
         const label = document.createElement("div");
@@ -398,6 +409,7 @@
         const img = document.createElement("img");
         const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
         img.src = imagePath;
+        img.loading = "lazy";
         img.onerror = () => {
           itemDiv.style.display = "none";
         };
