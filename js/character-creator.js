@@ -24,6 +24,7 @@
 
     // Load Kits list
     async function loadKitsList() {
+      showGlobalLoading("Đang tải danh sách bộ sưu tập...");
       try {
         const response = await fetch("/api/get_kits_list", {
           method: "POST",
@@ -36,11 +37,14 @@
           kits = result.kits;
 
           if (kits.length > 0) {
-            // Auto-select the first kit
-            const firstKit = kits[0];
-            CURRENT_KIT_FOLDER = firstKit.folder;
-            KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
+            // Check localStorage for saved kit
+            const savedKit = localStorage.getItem("selected_kit");
+            const kitToSelect = (savedKit && kits.find(k => k.folder === savedKit)) 
+                ? kits.find(k => k.folder === savedKit) 
+                : kits[0];
 
+            CURRENT_KIT_FOLDER = kitToSelect.folder;
+            KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
           }
 
           const selector = document.getElementById("kit-selector");
@@ -66,9 +70,13 @@
     // Switch Kit
     function switchKit(folderName) {
       if (!folderName) return;
+      showGlobalLoading("Đang chuyển bộ sưu tập...");
 
       CURRENT_KIT_FOLDER = folderName;
       KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
+
+      // Save to localStorage
+      localStorage.setItem("selected_kit", folderName);
 
 
       // Clear current kit structure to trigger fresh load
@@ -283,6 +291,7 @@
         }
       }
       updateFocusUI(); // Initial focus UI update
+      hideGlobalLoading();
     }
 
     // Internal select item for auto-init
@@ -384,6 +393,11 @@
 
       // Generate items from 1 to items_count
       for (let itemNum = 1; itemNum <= part.items_count; itemNum++) {
+        // Nếu server có cung cấp danh sách existing_thumbs, lọc theo đó luôn
+        if (part.existing_thumbs && !part.existing_thumbs.includes(itemNum)) {
+           continue; 
+        }
+
         const itemDiv = document.createElement("div");
         itemDiv.className = "item-option";
         itemDiv.dataset.itemNumber = itemNum;
@@ -396,9 +410,11 @@
         }
 
         const img = document.createElement("img");
+        img.loading = "lazy"; // Tối ưu hiệu năng load local
         const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
         img.src = imagePath;
         img.onerror = () => {
+          // Fallback ẩn nếu server chưa kịp update list
           itemDiv.style.display = "none";
         };
 
@@ -970,10 +986,13 @@
     }
 
     // Show folder files debug modal
-    async function showFolderFiles() {
+    async function showFolderFiles(forceOpen = true) {
       if (!currentPart) return;
 
       const modal = document.getElementById("file-debug-modal");
+      // Nếu không ép buộc mở và modal đang đóng thì thôi
+      if (!forceOpen && modal.style.display !== "flex") return;
+
       const grid = document.getElementById("file-debug-grid");
       const subtitle = document.getElementById("file-debug-subtitle");
 
@@ -1242,40 +1261,8 @@
 
         const result = await response.json();
         if (result.success) {
-          // Update DOM directly instead of showFolderFiles()
-          const container = document.querySelector(
-            `.file-debug-group[data-id="${id}"]`,
-          );
-          if (container) {
-            const thumbSlot = container.querySelector(".thumb-slot");
-            if (thumbSlot) {
-              const timestamp = new Date().getTime();
-              // Construct image URL (Approximation, verified by network tab usually)
-              // Thumbnails are always saved in the parent folder by app_server.py
-              let url = `/downloads/${CURRENT_KIT_FOLDER}/${currentPart.part.folder}/${targetName}`;
-
-
-              thumbSlot.className = "file-debug-slot thumb-slot";
-              thumbSlot.style =
-                "flex:1; display:flex; flex-direction:column; align-items:center; position:relative;";
-              thumbSlot.title = targetName;
-              thumbSlot.innerHTML = `
-                                <img src="${url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
-                                <span>${targetName}</span>
-                                
-                                <div style="margin-top:5px; display:flex; gap:5px;">
-                                    <button onclick="renameFile('${targetName}')" title="Đổi tên" style="cursor:pointer; border:none; background:#f39c12; color:white; border-radius:3px; padding:2px 5px;">✏️</button>
-                                    <button onclick="deleteFile('${targetName}')" title="Xóa" style="cursor:pointer; border:none; background:#c0392b; color:white; border-radius:3px; padding:2px 5px;">🗑️</button>
-                                </div>
-                             `;
-              // Remove ondrop/ondragover which were on the empty slot
-              thumbSlot.removeAttribute("ondrop");
-              thumbSlot.removeAttribute("ondragover");
-            }
-          } else {
-            // Fallback if ID finding fails (shouldn't happen)
-            showFolderFiles();
-          }
+          await loadKitStructure(true);
+          showFolderFiles(false);
         } else {
           alert("Lỗi: " + result.message);
         }
@@ -1311,66 +1298,8 @@
         });
         const result = await response.json();
         if (result.success) {
-          if (filename === "nav.png") {
-            showFolderFiles();
-            return;
-          }
-
-          if (filename.startsWith("thumb_")) {
-            let id = filename.replace("thumb_", "").replace(".png", "");
-            const container = document.querySelector(
-              `.file-debug-group[data-id="${id}"]`,
-            );
-            if (container) {
-              const thumbSlot = container.querySelector(".thumb-slot");
-              if (thumbSlot) {
-                const mainNameSpan =
-                  container.querySelector(".main-slot span");
-                const mainName = mainNameSpan ? mainNameSpan.textContent : "";
-                const targetName = filename;
-
-                thumbSlot.className = "file-debug-slot thumb-slot";
-                thumbSlot.style =
-                  "flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; height:80px; border: 2px dashed #444;";
-                thumbSlot.title = "";
-                thumbSlot.innerHTML = `
-                                    <button onclick="createThumbnail('${mainName}', '${targetName}')" 
-                                            style="background: #27ae60; border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px;">
-                                        + Tạo Thumb
-                                    </button>
-                                    <span style="color:#e67e22; font-size:10px; margin-top:5px;">Kéo thả ảnh vào đây</span>
-                                  `;
-                thumbSlot.setAttribute("ondragover", "handleDragOver(event)");
-                thumbSlot.setAttribute(
-                  "ondrop",
-                  `handleDrop(event, '${targetName}')`,
-                );
-
-                thumbSlot.addEventListener("click", (e) => {
-                  if (e.target.tagName !== "BUTTON") return;
-                });
-              }
-            } else {
-              showFolderFiles();
-            }
-          } else {
-            // Main File
-            let id = filename.replace(".png", "");
-            const container = document.querySelector(
-              `.file-debug-group[data-id="${id}"]`,
-            );
-            if (container) {
-              const mainSlot = container.querySelector(".main-slot");
-              if (mainSlot) {
-                mainSlot.style = "flex:1; opacity:0.5; text-align:center;";
-                mainSlot.innerHTML = "No Main";
-                mainSlot.removeAttribute("draggable");
-                mainSlot.removeAttribute("ondragstart");
-              }
-            } else {
-              showFolderFiles();
-            }
-          }
+          await loadKitStructure(true);
+          showFolderFiles(false);
         } else {
           alert("Lỗi: " + result.message);
         }
@@ -1408,7 +1337,8 @@
         });
         const result = await response.json();
         if (result.success) {
-          showFolderFiles();
+          await loadKitStructure(true);
+          showFolderFiles(false);
         } else {
           alert("Lỗi: " + result.message);
         }
@@ -1459,7 +1389,8 @@
           });
           const result = await response.json();
           if (result.success) {
-            showFolderFiles();
+            await loadKitStructure(true);
+            showFolderFiles(false);
           } else {
             alert("Lỗi: " + result.message);
           }
@@ -2183,6 +2114,8 @@ function toggleMergeBackground() {
 
         if (result.success) {
           const stats = result.stats;
+          await loadKitStructure(true);
+          
           let message = `✅ Hoàn tất!\n\n`;
           message += `📁 Đã quét: ${stats.total_folders} folder\n`;
           message += `🖼️ Tổng ảnh: ${stats.total_images}\n`;
@@ -2197,11 +2130,6 @@ function toggleMergeBackground() {
           }
 
           alert(message);
-
-          // Reload kit structure để cập nhật UI
-          loadKitStructure(true);
-        } else {
-          alert("❌ Lỗi: " + result.message);
         }
       } catch (error) {
         hideGlobalLoading();
@@ -2237,9 +2165,8 @@ function toggleMergeBackground() {
         hideGlobalLoading();
 
         if (result.success) {
+          await loadKitStructure(true);
           alert(`✅ ${result.message}`);
-          // Reload kit structure
-          loadKitStructure(true);
         } else {
           alert("❌ Lỗi: " + result.message);
         }
@@ -2298,8 +2225,9 @@ function toggleMergeBackground() {
         hideGlobalLoading();
 
         if (result.success) {
+          await loadKitStructure(true);
+          showFolderFiles(false); // Cập nhật nội dung modal nếu đang mở
           alert(`✅ Hoàn tất!\n\n✨ Đã tạo thêm: ${result.stats.created_thumbs} thumb.`);
-          loadItems(currentPart.part); // Refresh item grid
         } else {
           alert("❌ Lỗi: " + result.message);
         }
@@ -2338,8 +2266,9 @@ function toggleMergeBackground() {
         hideGlobalLoading();
 
         if (result.success) {
+          await loadKitStructure(true);
+          showFolderFiles(false); // Cập nhật nội dung modal nếu đang mở
           alert(`✅ Đã xóa xong thumbnail của "${folderName}".`);
-          loadItems(currentPart.part); // Refresh item grid
         } else {
           alert("❌ Lỗi: " + result.message);
         }
@@ -2379,14 +2308,7 @@ function toggleMergeBackground() {
 
         if (result.success) {
           alert(`✅ Hoàn tất: ${result.message}`);
-          
-          // Update the nav icon image in the UI
-          imgVers = Date.now();
-          const navIconImg = document.querySelector(`[data-part-index="${currentPart.index}"] img`);
-          if (navIconImg) {
-            navIconImg.src = `${KIT_PATH}${folderName}/nav.png?v=${imgVers}`;
-            navIconImg.style.display = "block";
-          }
+          loadKitStructure(true);
         } else {
           alert("❌ Lỗi: " + result.message);
         }

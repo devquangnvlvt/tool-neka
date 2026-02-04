@@ -7,6 +7,7 @@ import zipfile
 import subprocess
 import re
 import tempfile
+import base64
 from urllib.parse import urlparse, parse_qs
 import mimetypes
 from config import DATA_DIR
@@ -45,16 +46,20 @@ def validate_id(id_str):
 # ======================================================
 
 class KitHandler(http.server.SimpleHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
     def send_api_response(self, success, message, extra=None):
+        res = {"success": success, "message": sanitize_error(message)}
+        if extra: res.update(extra)
+        response_bytes = json.dumps(res).encode('utf-8')
+
         self.send_response(200)
         self.send_header('Content-type', 'application/json')
+        self.send_header('Content-Length', str(len(response_bytes)))
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
         self.end_headers()
-        res = {"success": success, "message": sanitize_error(message)}
-        if extra: res.update(extra)
-        self.wfile.write(json.dumps(res).encode('utf-8'))
+        self.wfile.write(response_bytes)
     def do_GET(self):
         parsed_path = urlparse(self.path)
         if parsed_path.path == '/api/zip_kit':
@@ -91,16 +96,20 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     if not content_type:
                         content_type = 'application/octet-stream'
                     
-                    with open(full_path, 'rb') as f:
-                        content = f.read()
-                        
+                    stat = os.stat(full_path)
+                    content_length = stat.st_size
+                    last_modified = self.date_time_string(stat.st_mtime)
+
                     self.send_response(200)
                     self.send_header('Content-Type', content_type)
-                    self.send_header('Content-Length', len(content))
-                    # Cache for 1 hour to speed up UI
+                    self.send_header('Content-Length', content_length)
+                    self.send_header('Last-Modified', last_modified)
+                    # Cache for 1 hour, but browser must validate with Last-Modified
                     self.send_header('Cache-Control', 'public, max-age=3600')
                     self.end_headers()
-                    self.wfile.write(content)
+
+                    with open(full_path, 'rb') as f:
+                        shutil.copyfileobj(f, self.wfile) # Stream file to client (memory efficient)
                 else:
                     self.send_error(404, f"File not found: {rel_path}")
             except Exception as e:
@@ -197,11 +206,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             "folder": entry
                         })
             kits.sort(key=lambda x: x['name'])
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = json.dumps({"success": True, "kits": kits})
-            self.wfile.write(response.encode('utf-8'))
+            self.send_api_response(True, "", {"kits": kits})
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
@@ -337,7 +342,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     "item_layer_counts": item_layer_counts,
                     "has_colors": len(colors) > 0,
                     "missing_images": missing_images,
-                    "color_gaps": color_gaps
+                    "color_gaps": color_gaps,
+                    "existing_thumbs": sorted(list(set(item_indices)))
                 })
 
             # Check for duplicate X values
@@ -401,11 +407,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         missing_y.append(i)
             # ---------------------------
 
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = json.dumps({
-                "success": True, "parts": parts,
+            self.send_api_response(True, "", {
+                "parts": parts,
                 "has_separated_layers": len(separated_folders) > 0,
                 "separated_folders": separated_folders,
                 "duplicates": duplicate_warnings,
@@ -414,7 +417,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 "canvas_width": canvas_width,
                 "canvas_height": canvas_height
             })
-            self.wfile.write(response.encode('utf-8'))
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
 
