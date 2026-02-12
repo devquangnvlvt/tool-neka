@@ -1353,7 +1353,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             # If we already started sending headers, this might tail-fail, but usually okay for small zips
-            try: self.send_api_response(False, f"Server Error: {str(e)}")
+            print(f"Zip Kit Error: {e}")
+            import traceback
+            traceback.print_exc()
+            try: self.send_api_response(False, f"Server Error creating zip: {str(e)}")
             except: pass
 
     def handle_download_kit(self, data):
@@ -1411,9 +1414,13 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 # Tùy chọn: xóa zip sau khi gửi để tiết kiệm dung lượng
                 # os.remove(zip_path)
 
-            except subprocess.CalledProcessError:
-                self.send_api_response(False, f"Lỗi khi chạy download_neka_kit.py {kit_id}")
+            except subprocess.CalledProcessError as e:
+                print(f"Download script failed with code {e.returncode}")
+                self.send_api_response(False, f"Lỗi khi chạy script tải: {e}")
             except Exception as e:
+                print(f"Download handler error: {e}")
+                import traceback
+                traceback.print_exc()
                 self.send_api_response(False, f"Server error: {str(e)}")
 
     def handle_rename_color_folder(self, data):

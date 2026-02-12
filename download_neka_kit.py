@@ -11,14 +11,19 @@ from config import DATA_DIR
 
 
 # Try to import selenium
+# Try to import selenium
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
     from selenium.webdriver.common.by import By
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
+    from webdriver_manager.chrome import ChromeDriverManager
 except ImportError:
     webdriver = None
+    print("Warning: Selenium or webdriver-manager not found. Some features may be disabled.")
+
 
 import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -200,10 +205,20 @@ def get_clean_data_via_browser(url, output_file):
     print(f"Launching browser to fetch data from {url}...")
     
     chrome_options = Options()
+    # Run in headless mode to avoid popup
+    chrome_options.add_argument("--headless=new") 
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-    driver = webdriver.Chrome(options=chrome_options)
+    try:
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+    except Exception as e:
+        print(f"Error initializing Chrome driver: {e}")
+        return None
     
     try:
         driver.get(url)
