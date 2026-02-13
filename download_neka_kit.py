@@ -111,7 +111,7 @@ def apply_gradient(image_path, lut, output_path):
         gray_data = np.array(gray)
         lut_arr = np.array(lut, dtype=np.uint8)
         rgb_data = lut_arr[gray_data]
-        res_img = Image.fromarray(rgb_data, mode="RGB")
+        res_img = Image.fromarray(rgb_data)
         res_img.putalpha(a)
         res_img.save(output_path)
     except Exception as e:
