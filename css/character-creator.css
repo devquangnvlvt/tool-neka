@@ -230,8 +230,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  padding: 4px;
-  min-height: 70px;
+  aspect-ratio: 1;
 }
 
 .item-option img {
@@ -249,6 +248,12 @@ body {
   border-color: #667eea;
   border-width: 3px;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+/* In merge modal, item-option must NOT have fixed aspect-ratio so filenames show */
+.layer-library .item-option {
+  aspect-ratio: unset;
+  height: auto;
 }
 
 .item-none {
@@ -326,6 +331,57 @@ body {
   cursor: pointer;
   z-index: 5;
   accent-color: #e74c3c;
+}
+
+.color-count-badge {
+  position: absolute;
+  bottom: -4px;
+  left: -4px;
+  background: rgba(0, 0, 0, 0.72);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+  line-height: 1;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* Color Thumb Toggle */
+.color-thumb-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 2px solid #00b894;
+  border-radius: 6px;
+  color: #00b894;
+  background: #fff;
+  transition: all 0.2s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.color-thumb-toggle:has(input:checked) {
+  background: #00b894;
+  color: white;
+}
+
+.color-thumb-toggle input[type="checkbox"] {
+  accent-color: #00b894;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
 }
 
 .loading {

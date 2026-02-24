@@ -120,6 +120,7 @@
                   " onclick="showCurrentItemLayers()">
                 Chi tiết layer
               </button>
+
               <button id="merge-part-btn" class="btn" style="
                     background: #00b894;
                     color: white;
@@ -129,6 +130,11 @@
                   " onclick="mergeLayers()">
                 Ghép layer
               </button>
+              <label id="color-thumb-label" class="color-thumb-toggle" style="display: none;"
+                title="Hiển thị thumbnail theo màu đang chọn">
+                <input type="checkbox" id="color-thumb-check" onchange="toggleColorThumb(this.checked)">
+                <span>Item màu</span>
+              </label>
               <button id="flatten-colors-btn" class="btn" style="
                     background: #e67e22;
                     color: white;

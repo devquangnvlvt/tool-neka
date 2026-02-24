@@ -12,6 +12,15 @@
     let currentColorIndex = 0;
     let characterLayers = {};
     let imgVers = Date.now();
+    let showColorThumb = false; // Toggle: hiển thị thumb theo màu
+
+    // Toggle color thumb mode
+    function toggleColorThumb(checked) {
+      showColorThumb = checked;
+      if (currentPart) {
+        loadItems(currentPart.part);
+      }
+    }
 
     // Multi-region focus management
     let activeFocusArea = "colors"; // 'parts', 'items', 'colors'
@@ -358,6 +367,12 @@
         flattenBtn.style.display = "none";
       }
 
+      // Show color thumb toggle only if part has color folders
+      const colorThumbLabel = document.getElementById("color-thumb-label");
+      if (colorThumbLabel) {
+        colorThumbLabel.style.display = part.has_colors ? "inline-flex" : "none";
+      }
+
       // Show thumb control buttons
       document.getElementById("create-part-thumb-btn").style.display = "block";
       document.getElementById("delete-part-thumb-btn").style.display = "block";
@@ -407,13 +422,28 @@
         }
 
         const img = document.createElement("img");
-        const imagePath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
-        img.src = imagePath;
-        img.loading = "lazy";
-        img.onerror = () => {
-          itemDiv.style.display = "none";
-        };
 
+        // Determine thumb path: when toggle ON, show actual color image (1.png, 2.png...)
+        const defaultThumbPath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
+        const colorThumbPath = (showColorThumb && currentColor && currentColor !== "default")
+          ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}.png?v=${imgVers}`
+          : null;
+
+        if (colorThumbPath) {
+          img.src = colorThumbPath;
+          // Fallback to default thumb if color thumb not found
+          img.onerror = () => {
+            img.onerror = () => { itemDiv.style.display = "none"; };
+            img.src = defaultThumbPath;
+          };
+        } else {
+          img.src = defaultThumbPath;
+          img.onerror = () => {
+            itemDiv.style.display = "none";
+          };
+        }
+
+        img.loading = "lazy";
         itemDiv.appendChild(img);
 
         // Add layer count badge if > 1
@@ -521,6 +551,15 @@
             colorDiv.style.borderColor = "#ff7675";
         }
 
+        // Image count badge (bottom-left)
+        if (colorFolder !== "default" && part.color_image_counts && part.color_image_counts[colorFolder] !== undefined) {
+            const countBadge = document.createElement("div");
+            countBadge.className = "color-count-badge";
+            countBadge.textContent = part.color_image_counts[colorFolder];
+            countBadge.title = `${part.color_image_counts[colorFolder]} ảnh trong folder màu này`;
+            colorDiv.appendChild(countBadge);
+        }
+
         colorGrid.appendChild(colorDiv);
 
       });
@@ -603,6 +642,11 @@
         } else {
           renameBtn.style.display = "none";
         }
+      }
+
+      // Reload item grid thumbnails when color-thumb mode is active
+      if (showColorThumb && currentPart) {
+        loadItems(currentPart.part);
       }
 
       updateCharacter();

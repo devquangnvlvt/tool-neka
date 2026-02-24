@@ -306,6 +306,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             missing_images.append(i)
 
                 color_gaps = {} # color_name -> missing_indices
+                color_image_counts = {} # color_name -> count of X.png files
                 if colors:
                     for sub in colors:
                         sub_path = os.path.join(entry_path, sub)
@@ -317,6 +318,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                         sm = image_pattern.match(sf_entry.name)
                                         if sm: sub_indices.append(int(sm.group(1)))
                         except: pass
+                        
+                        color_image_counts[sub] = len(sub_indices)
                         
                         if sub_indices:
                             gaps = []
@@ -337,7 +340,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     "item_layer_counts": item_layer_counts,
                     "has_colors": len(colors) > 0,
                     "missing_images": missing_images,
-                    "color_gaps": color_gaps
+                    "color_gaps": color_gaps,
+                    "color_image_counts": color_image_counts
                 })
 
             # Check for duplicate X values
