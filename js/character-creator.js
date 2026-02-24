@@ -1528,6 +1528,65 @@
       };
       reader.readAsDataURL(file);
     }
+    
+    // Batch delete and reorder images
+    async function batchDeleteAndReorder() {
+      if (!currentPart) return;
+      
+      const input = document.getElementById('batch-delete-input');
+      const applyAllCheck = document.getElementById('batch-delete-all-check');
+      const value = input.value.trim();
+      const applyAll = applyAllCheck ? applyAllCheck.checked : true;
+      
+      if (!value) {
+        alert("Vui lòng nhập các số cần xóa (VD: 1, 3, 4)");
+        return;
+      }
+      
+      // Parse input (1, 3, 4 or 1 3 4 or 1;3;4)
+      const indices = value.split(/[\s,;]+/).map(i => parseInt(i)).filter(i => !isNaN(i));
+      
+      if (indices.length === 0) {
+        alert("Danh sách số không hợp lệ.");
+        return;
+      }
+      
+      const targetDesc = applyAll ? "TẤT CẢ thư mục màu" : `folder [${currentColor || 'Main'}]`;
+      if(!confirm(`Bạn chắc chắn muốn XÓA VĨNH VIỄN các ảnh [${indices.join(', ')}] trong ${targetDesc} và sắp xếp lại?`)) return;
+      
+      showLoading(`Đang xóa ${indices.length} ảnh và sắp xếp lại...`);
+      
+      try {
+        const response = await fetch("/api/batch_delete_reorder", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kit: CURRENT_KIT_FOLDER,
+            folder: currentPart.part.folder,
+            indices: indices,
+            apply_all: applyAll,
+            color: currentColor
+          })
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          // Clear input
+          input.value = "";
+          // Refresh file list modal
+          await showFolderFiles();
+          // Reload kit structure to update warnings if numbers changed
+          await loadKitStructure(true); // preserveSelection = true
+          alert(result.message);
+        } else {
+          alert("Lỗi: " + result.message);
+        }
+      } catch (e) {
+        alert("Lỗi server: " + e);
+      } finally {
+        hideLoading();
+      }
+    }
 
     // Drag & Drop Handlers
     function handleDragStart(e, filename) {

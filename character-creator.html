@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Đì Dai Nơ</title>
+  <title>Đì Đai Đơ</title>
   <link rel="stylesheet" href="css/character-creator.css">
 </head>
 
@@ -346,6 +346,17 @@
             margin-bottom: 5px;
           ">
         <h3>Danh sách file trong folder</h3>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4"
+            style="padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: white; width: 250px;">
+          <label style="display: flex; align-items: center; gap: 5px; color: #ccc; cursor: pointer;">
+            <input type="checkbox" id="batch-delete-all-check" checked style="width: 16px; height: 16px;"> Áp dụng tất
+            cả màu
+          </label>
+          <button onclick="batchDeleteAndReorder()"
+            style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Xóa
+            & Sắp xếp lại</button>
+        </div>
       </div>
       <p id="file-debug-subtitle" style="color: #888; margin-bottom: 20px">
         Đang tải...

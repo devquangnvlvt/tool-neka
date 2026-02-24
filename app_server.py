@@ -159,6 +159,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/download_kit': self.handle_download_kit,
             '/api/check_progress': self.handle_check_progress,
             '/api/create_nav': self.handle_create_nav,
+            '/api/batch_delete_reorder': self.handle_batch_delete_reorder,
         }
 
 
@@ -1720,7 +1721,115 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             self.send_api_response(False, f"Upload error: {str(e)}")
 
+    def handle_batch_delete_reorder(self, data):
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder')
+        target_indices = data.get('indices', []) # List of integers to delete
+        apply_all = data.get('apply_all', True)  # Default to True for backward compatibility
+        current_color = data.get('color')        # Optional, used if apply_all is False
 
+        if not kit_folder or not folder_name or not target_indices:
+            self.send_api_response(False, "Missing parameters (kit, folder, indices)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, folder_name)
+
+            if not os.path.exists(part_path):
+                self.send_api_response(False, "Part folder not found")
+                return
+
+            # Convert to set for faster lookup
+            to_delete = {int(i) for i in target_indices}
+            
+            # Identify directories to process
+            dirs_to_process = []
+            if apply_all:
+                dirs_to_process.append(part_path)
+                for entry in os.listdir(part_path):
+                    sub = os.path.join(part_path, entry)
+                    if os.path.isdir(sub):
+                        dirs_to_process.append(sub)
+            else:
+                # Only process specific folder
+                target_dir = part_path
+                if current_color and current_color != 'default':
+                    target_dir = safe_join(part_path, current_color)
+                
+                if os.path.exists(target_dir):
+                    dirs_to_process.append(target_dir)
+                else:
+                    self.send_api_response(False, f"Target directory not found: {target_dir}")
+                    return
+
+            image_pattern = re.compile(r"^(\d+)\.png$")
+            thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
+
+            processed_dirs = 0
+            
+            for target_dir in dirs_to_process:
+                is_root = (target_dir == part_path)
+                
+                # 1. Delete target files
+                for entry in os.listdir(target_dir):
+                    m_img = image_pattern.match(entry)
+                    if m_img:
+                        idx = int(m_img.group(1))
+                        if idx in to_delete:
+                            try: os.remove(os.path.join(target_dir, entry))
+                            except: pass
+                    
+                    if is_root:
+                        m_thumb = thumb_pattern.match(entry)
+                        if m_thumb:
+                            idx = int(m_thumb.group(1))
+                            if idx in to_delete:
+                                try: os.remove(os.path.join(target_dir, entry))
+                                except: pass
+
+                # 2. Reorder remaining files
+                # Collect remaining number images
+                remaining_images = []
+                for entry in os.listdir(target_dir):
+                    m = image_pattern.match(entry)
+                    if m:
+                        remaining_images.append(int(m.group(1)))
+                
+                remaining_images.sort()
+                
+                # Rename them to 1.png, 2.png...
+                for new_idx, old_idx in enumerate(remaining_images, 1):
+                    if new_idx == old_idx: continue # Already correct
+                    
+                    old_img_name = f"{old_idx}.png"
+                    new_img_name = f"{new_idx}.png"
+                    
+                    try:
+                        os.rename(os.path.join(target_dir, old_img_name), 
+                                  os.path.join(target_dir, new_img_name))
+                    except Exception as e:
+                        print(f"Error reordering {old_img_name} to {new_img_name} in {target_dir}: {e}")
+                    
+                    # Also reorder thumbs if in root
+                    if is_root:
+                        old_thumb_name = f"thumb_{old_idx}.png"
+                        new_thumb_name = f"thumb_{new_idx}.png"
+                        if os.path.exists(os.path.join(target_dir, old_thumb_name)):
+                            try:
+                                os.rename(os.path.join(target_dir, old_thumb_name), 
+                                          os.path.join(target_dir, new_thumb_name))
+                            except: pass
+                
+                processed_dirs += 1
+
+            self.send_api_response(True, f"Đã xóa {len(to_delete)} ảnh và sắp xếp lại {processed_dirs} thư mục.")
+
+        except Exception as e:
+            self.send_api_response(False, f"Lỗi xử lý hàng loạt: {str(e)}")
+
+
+# ======================================================
 
 class ThreadedHTTPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     daemon_threads = True
