@@ -249,7 +249,11 @@ body {
   border-width: 3px;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
-
+.delete-item{
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
 /* In merge modal, item-option must NOT have fixed aspect-ratio so filenames show */
 .layer-library .item-option {
   aspect-ratio: unset;
