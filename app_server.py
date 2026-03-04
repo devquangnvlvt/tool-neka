@@ -160,6 +160,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/check_progress': self.handle_check_progress,
             '/api/create_nav': self.handle_create_nav,
             '/api/batch_delete_reorder': self.handle_batch_delete_reorder,
+            '/api/crop_batch_thumbs': self.handle_crop_batch_thumbs,
         }
 
 
@@ -1667,6 +1668,54 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         print(f"Error deleting {filename}: {e}")
         
         return self.send_api_response(True, f"Đã xóa thành công {deleted_count} thumbnail.")
+
+    def handle_crop_batch_thumbs(self, data):
+        from PIL import Image
+        kit_folder = data.get('kit')
+        folder_name = data.get('folder') # Part folder
+        color = data.get('color')
+        crop_x = int(data.get('x', 0))
+        crop_y = int(data.get('y', 0))
+        crop_w = int(data.get('width', 44))
+        crop_h = int(data.get('height', 44))
+
+        if not kit_folder or not folder_name or not color:
+            return self.send_api_response(False, "Missing parameters (kit, folder, color)")
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, folder_name)
+            color_path = safe_join(part_path, color)
+
+            if not os.path.exists(color_path):
+                return self.send_api_response(False, f"Color folder not found: {color}")
+
+            # Find all N.png files in the color folder
+            image_pattern = re.compile(r"^(\d+)\.png$")
+            processed_count = 0
+            
+            for filename in os.listdir(color_path):
+                match = image_pattern.match(filename)
+                if match:
+                    num = match.group(1)
+                    source_path = os.path.join(color_path, filename)
+                    target_path = os.path.join(part_path, f"thumb_{num}.png")
+
+                    try:
+                        with Image.open(source_path) as img:
+                            # Crop: (left, top, right, bottom)
+                            box = (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h)
+                            cropped_img = img.crop(box)
+                            # Save as thumbnail in part folder
+                            cropped_img.save(target_path)
+                            processed_count += 1
+                    except Exception as e:
+                        print(f"Error processing {filename}: {e}")
+
+            return self.send_api_response(True, f"Đã tạo thành công {processed_count} thumbnail vào folder bộ phận.")
+
+        except Exception as e:
+            return self.send_api_response(False, f"Lỗi phía server: {str(e)}")
 
     def handle_upload_file(self, data):
         import base64
