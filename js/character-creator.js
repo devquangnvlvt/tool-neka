@@ -2666,8 +2666,14 @@ function handleCropMove(e) {
 
 function updateCropFrameSize() {
   const frame = document.getElementById("crop-frame");
-  const w = parseInt(document.getElementById("crop-w").value);
-  const h = parseInt(document.getElementById("crop-h").value);
+  const wInput = document.getElementById("crop-w");
+  const hInput = document.getElementById("crop-h");
+
+  const w = parseInt(wInput.value) || 44;
+  
+  // Link height to width
+  hInput.value = w;
+  const h = w;
 
   frame.style.width = w * cropScale + "px";
   frame.style.height = h * cropScale + "px";
