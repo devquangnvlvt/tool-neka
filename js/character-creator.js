@@ -2042,6 +2042,13 @@ async function redrawMergePreview() {
   }
 }
 
+function toggleCropBackground() {
+  const wrapper = document.getElementById("crop-canvas-wrapper");
+  if (wrapper) {
+    wrapper.classList.toggle("white-bg");
+  }
+}
+
 function shuffleStack() {
   for (let i = mergeStack.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -2453,8 +2460,8 @@ async function createPartThumbs() {
 
   const folderName = currentPart.part.folder;
 
-  // If a color is selected, show crop modal for advanced cropping
-  if (currentColor && currentColor !== "default") {
+  // Allow cropping even for default color (single color parts)
+  if (currentColor) {
     openCropThumbnailModal();
     return;
   }
@@ -2607,10 +2614,14 @@ function openCropThumbnailModal() {
   cropCanvas = document.getElementById("crop-canvas");
   cropCtx = cropCanvas.getContext("2d");
 
-  // Load sample image (1.png) from the color folder
+  // Load sample image (1.png). Handle default color path.
   cropImg = new Image();
   cropImg.crossOrigin = "anonymous";
-  cropImg.src = `${KIT_PATH}${folder}/${color}/1.png?v=${Date.now()}`;
+  const imagePath =
+    color === "default"
+      ? `${KIT_PATH}${folder}/1.png`
+      : `${KIT_PATH}${folder}/${color}/1.png`;
+  cropImg.src = `${imagePath}?v=${Date.now()}`;
 
   cropImg.onload = () => {
     // Limit display size but keep aspect ratio

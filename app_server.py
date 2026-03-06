@@ -1685,7 +1685,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         try:
             kit_path = safe_join(DATA_DIR, kit_folder)
             part_path = safe_join(kit_path, folder_name)
-            color_path = safe_join(part_path, color)
+            if color == 'default':
+                color_path = part_path
+            else:
+                color_path = safe_join(part_path, color)
 
             if not os.path.exists(color_path):
                 return self.send_api_response(False, f"Color folder not found: {color}")

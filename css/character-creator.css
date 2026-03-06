@@ -678,6 +678,12 @@ body {
   box-shadow: 0 8px 32px rgba(0,0,0,0.5);
   overflow: hidden;
   flex-shrink: 0;
+  transition: background 0.3s;
+}
+
+.crop-canvas-wrapper.white-bg {
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 16px 16px;
+  border-color: #ddd;
 }
 
 #crop-canvas { display: block; max-width: 580px; }
