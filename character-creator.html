@@ -23,46 +23,23 @@
           <button class="btn btn-secondary" onclick="randomizeCharacter()">
             Random
           </button>
-          <button class="btn btn-secondary" onclick="resetAllLayers()" style="background: #e74c3c">
+          <button class="btn btn-secondary btn-red" onclick="resetAllLayers()">
             Reset
           </button>
         </div>
-        <div id="structure-warnings" style="
-              display: none;
-              padding: 10px;
-              background: #fff3e0;
-              border: 1px solid #ffe0b2;
-              color: #e65100;
-              border-radius: 5px;
-              margin-bottom: 10px;
-              font-size: 13px;
-            "></div>
-        <div id="separated-layers-info" style="
-              display: none;
-              padding: 15px;
-              background: #e3f2fd;
-              border: 1px solid #bbdefb;
-              border-radius: 12px;
-              margin-top: 10px;
-              width: 100%;
-              text-align: left;
-            ">
-          <h4 style="color: #1976d2; margin-bottom: 8px; font-size: 14px">
+        <div id="structure-warnings" class="warning-box p-10 m-b-10 font-13 d-none"></div>
+        <div id="separated-layers-info" class="info-box p-15 m-t-10 w-100 text-left d-none">
+          <h4 class="m-b-8 font-14">
             🌟 Các bộ phận có layer tách:
           </h4>
-          <div id="separated-folders-list" style="font-size: 12px; color: #444; line-height: 1.6"></div>
+          <div id="separated-folders-list" class="sep-folders-list font-12"></div>
         </div>
       </div>
 
       <div class="sidebar">
         <div class="kit-selector-area">
-          <div style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 5px;
-              ">
-            <div style="display: flex; align-items: center; gap: 8px;">
+          <div class="flex-between m-b-5">
+            <div class="flex-gap-8 align-center">
               <h3>Bộ sưu tập</h3>
               <div class="tooltip-container">
                 <span class="info-icon">?</span>
@@ -73,12 +50,7 @@
                 </div>
               </div>
             </div>
-            <button class="btn" style="
-                  background: #667eea;
-                  color: white;
-                  padding: 5px 10px;
-                  font-size: 12px;
-                " onclick="downloadZip()">
+            <button class="btn btn-brand btn-small" onclick="downloadZip()">
               📦 Data (ZIP)
             </button>
           </div>
@@ -88,24 +60,13 @@
         </div>
 
         <div id="part-navigation-area" class="part-navigation focus-region">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div class="flex-between m-b-15">
             <h3>Chọn bộ phận <span id="count-layer"></span></h3>
             <div>
-              <button class="btn" style="
-                  background: #3498db;
-                  color: white;
-                  padding: 5px 10px;
-                  font-size: 12px;
-                " onclick="autoCreateThumbs()">
+              <button class="btn btn-blue btn-small" onclick="autoCreateThumbs()">
                 Tạo Thumb Tự Động toàn bộ folder
               </button>
-              <button class="btn" style="
-                  background: #e74c3c;
-                  color: white;
-                  padding: 5px 10px;
-                  font-size: 12px;
-                  margin-left: 5px;
-                " onclick="deleteAllThumbs()">
+              <button class="btn btn-red btn-small m-l-5" onclick="deleteAllThumbs()">
                 Xóa Tất Cả Thumb toàn bộ folder
               </button>
             </div>
@@ -114,81 +75,34 @@
         </div>
 
         <div id="item-selector-area" class="item-selector focus-region">
-          <div style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                margin-bottom: 15px;
-              ">
+          <div class="flex-between m-b-15">
             <h3 id="current-part-name">Chọn một bộ phận</h3>
-            <div style="display: flex; gap: 5px">
-              <button id="layer-details-btn" class="btn" style="
-                    background: #7c3aed;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="showCurrentItemLayers()">
+            <div class="flex-gap-5">
+              <button id="layer-details-btn" class="btn btn-purple btn-small d-none" onclick="showCurrentItemLayers()">
                 Chi tiết layer
               </button>
 
-              <button id="merge-part-btn" class="btn" style="
-                    background: #00b894;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="mergeLayers()">
+              <button id="merge-part-btn" class="btn btn-green btn-small d-none" onclick="mergeLayers()">
                 Ghép layer
               </button>
-              <label id="color-thumb-label" class="color-thumb-toggle" style="display: none;"
+              <label id="color-thumb-label" class="color-thumb-toggle d-none"
                 title="Hiển thị thumbnail theo màu đang chọn">
                 <input type="checkbox" id="color-thumb-check" onchange="toggleColorThumb(this.checked)">
                 <span>Item màu</span>
               </label>
-              <button id="flatten-colors-btn" class="btn" style="
-                    background: #e67e22;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="flattenColors()">
+              <button id="flatten-colors-btn" class="btn btn-orange btn-small d-none" onclick="flattenColors()">
                 Gộp folder
               </button>
-              <button id="create-part-thumb-btn" class="btn" style="
-                    background: #3498db;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="createPartThumbs()">
+              <button id="create-part-thumb-btn" class="btn btn-blue btn-small d-none" onclick="createPartThumbs()">
                 Tạo Thumb
               </button>
-              <button id="delete-part-thumb-btn" class="btn" style="
-                    background: #e74c3c;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="deletePartThumbs()">
+              <button id="delete-part-thumb-btn" class="btn btn-red btn-small d-none" onclick="deletePartThumbs()">
                 Xóa Thumb
               </button>
-              <button id="create-part-nav-btn" class="btn" style="
-                    background: #6c5ce7;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="createPartNav()">
+              <button id="create-part-nav-btn" class="btn btn-indigo btn-small d-none" onclick="createPartNav()">
                 Tạo Nav
               </button>
-              <button id="delete-part-btn" class="btn" style="
-                    background: #ff7675;
-                    color: white;
-                    padding: 5px 10px;
-                    font-size: 12px;
-                    display: none;
-                  " onclick="promptDeletePart()">
+              <button id="delete-part-btn" class="btn btn-coral btn-small d-none" onclick="promptDeletePart()">
                 Xóa layer
               </button>
             </div>
@@ -235,77 +149,55 @@
             <canvas id="merge-preview-canvas" width="1436" height="1902"></canvas>
           </div>
         </div>
-        <div class="stack-manager" style="display: flex; flex-direction: column">
+        <div class="stack-manager d-flex flex-column">
           <h3>🛠️ Thứ tự ghép</h3>
           <p style="font-size: 11px; color: #666; margin-bottom: 10px">
             Ảnh bên dưới sẽ nằm đè lên ảnh bên trên.
           </p>
-          <div id="merge-stack-list" style="flex: 1; overflow-y: auto"></div>
+          <div id="merge-stack-list" class="flex-1 overflow-y-auto"></div>
 
           <!-- Color Adjustment Panel -->
-          <div id="color-adjust-panel" style="
-                display: none;
-                margin-top: 15px;
-                padding: 15px;
-                background: rgba(255, 255, 255, 0.05);
-                border-radius: 8px;
-              ">
-            <h4 style="margin: 0 0 10px 0; font-size: 13px">
+          <div id="color-adjust-panel" class="color-adjust-box d-none m-t-15 p-15">
+            <h4 class="m-0 m-b-10 font-13">
               🎨 Điều chỉnh màu: <span id="selected-layer-name"></span>
             </h4>
 
-            <div style="margin-bottom: 10px">
-              <label style="font-size: 11px; color: #999">Màu sắc: <span id="color-value">#FFFFFF</span></label>
-              <div style="display: flex; gap: 10px; align-items: center">
-                <input type="color" id="color-picker" value="#FFFFFF" style="
-                      width: 60px;
-                      height: 30px;
-                      border: none;
-                      cursor: pointer;
-                    " oninput="updateColorAdjustment()" />
-                <button class="btn btn-secondary" style="padding: 5px 10px; font-size: 11px" onclick="clearColorTint()">
+            <div class="m-b-10">
+              <label class="font-11 text-muted">Màu sắc: <span id="color-value">#FFFFFF</span></label>
+              <div class="flex-gap-10">
+                <input type="color" id="color-picker" value="#FFFFFF" class="color-picker-input" oninput="updateColorAdjustment()" />
+                <button class="btn btn-secondary btn-small" onclick="clearColorTint()">
                   ✖ Xóa màu
                 </button>
               </div>
             </div>
 
-            <button class="btn btn-secondary" style="width: 100%; font-size: 11px" onclick="resetColorAdjustment()">
+            <button class="btn btn-secondary w-100 font-11" onclick="resetColorAdjustment()">
               ↺ Reset
             </button>
           </div>
 
-          <div style="margin-top: 15px">
-            <button class="btn btn-secondary" style="width: 100%; margin-bottom: 5px" onclick="shuffleStack()">
+          <div class="m-t-15">
+            <button class="btn btn-secondary w-100 m-b-5" onclick="shuffleStack()">
               🎲 Random
             </button>
-            <button class="btn btn-secondary" style="width: 100%; color: #ff7675" onclick="clearStack()">
+            <button class="btn btn-secondary w-100 btn-coral" onclick="clearStack()">
               🗑️ Xóa hết
             </button>
           </div>
         </div>
       </div>
       <div class="merge-footer">
-        <div style="flex: 1; display: flex; align-items: center; gap: 15px">
+        <div class="flex-1 flex-gap-15 align-center">
           <div>
-            <input type="text" id="merge-dest-name" value="1" style="
-                  padding: 8px;
-                  border-radius: 6px;
-                  border: 1px solid #ddd;
-                  width: 100px;
-                " />
+            <input type="text" id="merge-dest-name" value="1" class="input-merge-id" />
             .png
           </div>
-          <label style="
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                cursor: pointer;
-                font-size: 13px;
-              ">
+          <label class="flex-gap-5 align-center pointer font-13">
             <input type="checkbox" id="bulk-apply-check" /> Áp dụng tất cả màu
           </label>
         </div>
-        <button id="confirm-merge-btn" class="btn" style="background: #00b894; color: white" onclick="confirmMerge()">
+        <button id="confirm-merge-btn" class="btn btn-green" onclick="confirmMerge()">
           ✅ Lưu
         </button>
       </div>
@@ -313,15 +205,15 @@
   </div>
 
   <!-- Layer Details Modal -->
-  <div id="layer-details-modal" class="modal-overlay" style="display: none">
-    <div class="merge-modal" style="max-width: 800px; height: auto; max-height: 80vh">
+  <div id="layer-details-modal" class="modal-overlay">
+    <div class="merge-modal modal-custom-medium">
       <div class="merge-header">
         <h2>📋 Chi tiết các layer</h2>
         <button class="btn btn-secondary" onclick="closeLayerDetailsModal()">
           ✖
         </button>
       </div>
-      <div style="padding: 20px; overflow-y: auto; flex: 1">
+      <div class="p-20 overflow-y-auto flex-1">
         <div id="layer-details-content">
           <div class="loading">
             <div class="spinner"></div>
@@ -333,8 +225,8 @@
   </div>
 
   <!-- Thumbnail Crop Modal -->
-  <div id="crop-modal-overlay" class="modal-overlay" style="display: none;">
-    <div class="merge-modal" style="max-width: 900px; width: 95%;">
+  <div id="crop-modal-overlay" class="modal-overlay">
+    <div class="merge-modal modal-custom-large">
       <div class="merge-header">
         <h2>✂️ Cắt Thumbnail Hàng Loạt &mdash; <span id="crop-part-name"></span></h2>
         <button class="btn btn-secondary" onclick="closeCropModal()">✖</button>
@@ -349,7 +241,7 @@
         <div class="crop-modal-layout">
           <!-- Canvas Area -->
           <div class="crop-canvas-wrapper" id="crop-canvas-wrapper">
-            <div style="position: absolute; top: 10px; right: 10px; z-index: 10">
+          <div class="pos-absolute t-10 r-10 z-10">
               <button class="btn btn-secondary" onclick="toggleCropBackground()" title="Đổi màu nền (Trắng/Đen)">
                 🌗
               </button>
@@ -389,9 +281,9 @@
         </div>
       </div>
 
-      <div class="merge-footer" style="justify-content: flex-end;">
+      <div class="merge-footer justify-end">
         <button class="btn btn-secondary" onclick="closeCropModal()">Hủy</button>
-        <button id="start-crop-btn" class="btn" onclick="confirmBatchCrop()">
+        <button id="start-crop-btn" class="btn btn-green" onclick="confirmBatchCrop()">
           🚀 Bắt đầu tạo Thumbnail
         </button>
       </div>
@@ -400,52 +292,32 @@
   <!-- Script for Background Toggle -->
 
   <!-- File Debug Modal -->
-  <div id="file-debug-modal" class="modal-overlay" style="display: none; align-items: flex-start; padding-top: 50px">
-    <div class="modal-content" style="width: 95%; max-height: 90vh; overflow-y: auto">
-      <div style="display: flex; justify-content: flex-end; margin-bottom: 20px">
-        <button onclick="
-              document.getElementById('file-debug-modal').style.display = 'none'
-            " style="
-              padding: 10px 20px;
-              background: #555;
-              border: none;
-              color: white;
-              border-radius: 4px;
-              cursor: pointer;
-            ">
+  <div id="file-debug-modal" class="modal-overlay debug-modal-position">
+    <div class="modal-content modal-custom-large">
+      <div class="flex-justify-end m-b-20">
+        <button class="btn btn-dark" onclick="document.getElementById('file-debug-modal').style.display = 'none'">
           Đóng
         </button>
       </div>
-      <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 5px;
-          ">
+      <div class="flex-between m-b-5">
         <h3>Danh sách file trong folder</h3>
         <div class="delete-item">
-          <div style="flex-wrap: wrap;margin-top: 25px;">
-            <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4"
-              style="padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: white; width: 250px;">
-            <label style="display: flex; align-items: center; gap: 5px; color: #ccc; cursor: pointer;">
-              <input type="checkbox" id="batch-delete-all-check" checked style="width: 16px; height: 16px;"> Áp dụng tất
+          <div class="flex-wrap m-t-25">
+            <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4" class="debug-input p-8 br-4 w-250px">
+            <label class="flex-gap-5 text-muted pointer align-center">
+              <input type="checkbox" id="batch-delete-all-check" checked class="checkbox-large"> Áp dụng tất
               cả folder màu
             </label>
           </div>
-          <button onclick="batchDeleteAndReorder()"
-            style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">Xóa
+          <button class="btn btn-red" onclick="batchDeleteAndReorder()">Xóa
             & Sắp xếp lại</button>
         </div>
       </div>
-      <p id="file-debug-subtitle" style="color: #888; margin-bottom: 20px">
+      <p id="file-debug-subtitle" class="text-muted m-b-20">
         Đang tải...
       </p>
 
-      <div id="file-debug-grid" style="
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 15px;
-          ">
+      <div id="file-debug-grid" class="debug-file-grid">
         <!-- Files will be populated here -->
       </div>
     </div>

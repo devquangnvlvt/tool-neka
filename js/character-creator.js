@@ -252,10 +252,25 @@ function initializeApp(preserveSelection = false) {
     }
 
     const img = document.createElement("img");
-    img.src = `${KIT_PATH}${part.folder}/nav.png?v=${imgVers}`;
+    const navBase = `${KIT_PATH}${part.folder}/nav`;
+    
+    const tryLoadNav = (imgEl, base, extensions) => {
+      let currentExtIdx = 0;
+      const tryNext = () => {
+        if (currentExtIdx < extensions.length) {
+          const ext = extensions[currentExtIdx++];
+          imgEl.src = `${base}.${ext}?v=${imgVers}`;
+        } else {
+          imgEl.style.display = "none";
+        }
+      };
+      imgEl.onerror = tryNext;
+      tryNext();
+    };
+
+    tryLoadNav(img, navBase, ["png", "webp"]);
     img.alt = part.folder;
     img.loading = "lazy";
-    img.onerror = () => (img.style.display = "none");
 
     const label = document.createElement("div");
     label.className = "label";
@@ -425,27 +440,39 @@ async function loadItems(part) {
 
     const img = document.createElement("img");
 
-    // Determine thumb path: when toggle ON, show actual color image (1.png, 2.png...)
-    const defaultThumbPath = `${KIT_PATH}${part.folder}/thumb_${itemNum}.png?v=${imgVers}`;
-    const colorThumbPath =
-      showColorThumb && currentColor && currentColor !== "default"
-        ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}.png?v=${imgVers}`
-        : null;
+    // Determine thumb path: trying .png then .webp
+    const itemPathBase = `${KIT_PATH}${part.folder}/${itemNum}`; // Corrected itemNumber to itemNum
+    const colorItemPathBase = currentColor && currentColor !== "default"
+      ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}` // Corrected itemNumber to itemNum
+      : null;
 
-    if (colorThumbPath) {
-      img.src = colorThumbPath;
-      // Fallback to default thumb if color thumb not found
-      img.onerror = () => {
-        img.onerror = () => {
+    const thumbPathBase = `${KIT_PATH}${part.folder}/thumb_${itemNum}`; // Corrected itemNumber to itemNum
+
+    // Set initial src to .png and use onerror to fallback to .webp
+    const tryLoadImage = (imgEl, base, extensions, finalFallback = null) => {
+      let currentExtIdx = 0;
+      
+      const tryNext = () => {
+        if (currentExtIdx < extensions.length) {
+          const ext = extensions[currentExtIdx++];
+          imgEl.src = `${base}.${ext}?v=${imgVers}`;
+        } else if (finalFallback) {
+          finalFallback();
+        } else {
           itemDiv.style.display = "none";
-        };
-        img.src = defaultThumbPath;
+        }
       };
+
+      imgEl.onerror = tryNext;
+      tryNext();
+    };
+
+    if (showColorThumb && colorItemPathBase) {
+      tryLoadImage(img, colorItemPathBase, ['png', 'webp'], () => {
+         tryLoadImage(img, thumbPathBase, ['png', 'webp']);
+      });
     } else {
-      img.src = defaultThumbPath;
-      img.onerror = () => {
-        itemDiv.style.display = "none";
-      };
+      tryLoadImage(img, thumbPathBase, ['png', 'webp']);
     }
 
     img.loading = "lazy";
@@ -804,18 +831,18 @@ async function renderCharacter() {
   // Pre-load all images in parallel
   const loadPromises = sortedLayers.map(async (layer) => {
     const { folderName, color, itemNumber } = layer;
-    let imagePath;
+    let imagePathBase;
     if (color === "default" || !color) {
-      imagePath = `${KIT_PATH}${folderName}/${itemNumber}.png?v=${imgVers}`;
+      imagePathBase = `${KIT_PATH}${folderName}/${itemNumber}`;
     } else {
-      imagePath = `${KIT_PATH}${folderName}/${color}/${itemNumber}.png?v=${imgVers}`;
+      imagePathBase = `${KIT_PATH}${folderName}/${color}/${itemNumber}`;
     }
 
     try {
-      const img = await loadImage(imagePath);
-      return img;
+      // Thử tải .png trước, nếu lỗi thử .webp
+      return await loadImageWithFallback(imagePathBase, ['png', 'webp']);
     } catch (error) {
-      console.error(`Failed to load: ${imagePath}`);
+      console.error(`Failed to load: ${imagePathBase}`);
       return null;
     }
   });
@@ -830,6 +857,18 @@ async function renderCharacter() {
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
     }
   });
+}
+
+// Hàm hỗ trợ tải ảnh với fallback đuôi mở rộng
+async function loadImageWithFallback(basePath, extensions) {
+  for (const ext of extensions) {
+    try {
+      return await loadImage(`${basePath}.${ext}?v=${imgVers}`);
+    } catch (e) {
+      // Tiếp tục thử đuôi tiếp theo
+    }
+  }
+  throw new Error(`All extensions failed for ${basePath}`);
 }
 
 // Load image helper
@@ -1083,20 +1122,20 @@ async function showFolderFiles() {
       const others = [];
 
       result.files.forEach((file) => {
-        // Check for Main Image: "1.png"
-        if (file.name.match(/^\d+\.png$/)) {
+        // Check for Main Image: "1.png" or "1.webp"
+        if (file.name.match(/^\d+\.(png|webp)$/)) {
           const id = file.name.split(".")[0];
           if (!groups[id]) groups[id] = {};
           groups[id].main = file;
         }
-        // Check for Thumb Image: "thumb_1.png"
-        else if (file.name.match(/^thumb_\d+\.png$/)) {
+        // Check for Thumb Image: "thumb_1.png" or "thumb_1.webp"
+        else if (file.name.match(/^thumb_\d+\.(png|webp)$/)) {
           const id = file.name.split(".")[0].replace("thumb_", "");
           if (!groups[id]) groups[id] = {};
           groups[id].thumb = file;
         }
-        // Check for nav.png
-        else if (file.name === "nav.png") {
+        // Check for nav.png (keeping as is or could support nav.webp)
+        else if (file.name === "nav.png" || file.name === "nav.webp") {
           if (!groups["nav"]) groups["nav"] = {};
           groups["nav"].main = file;
         } else {
@@ -1286,8 +1325,8 @@ async function createThumbnail(sourceName, targetName) {
       colorParam = activeColorOption.dataset.colorFolder;
     }
 
-    // Derive ID from targetName (thumb_X.png)
-    let id = targetName.replace("thumb_", "").replace(".png", "");
+    // Derive ID from targetName (thumb_X.png or thumb_X.webp)
+    let id = targetName.replace("thumb_", "").split(".")[0];
 
     const response = await fetch("/api/create_thumb", {
       method: "POST",
@@ -1368,13 +1407,13 @@ async function deleteFile(filename) {
     });
     const result = await response.json();
     if (result.success) {
-      if (filename === "nav.png") {
+      if (filename === "nav.png" || filename === "nav.webp") {
         showFolderFiles();
         return;
       }
 
       if (filename.startsWith("thumb_")) {
-        let id = filename.replace("thumb_", "").replace(".png", "");
+        let id = filename.replace("thumb_", "").split(".")[0];
         const container = document.querySelector(
           `.file-debug-group[data-id="${id}"]`,
         );
@@ -1411,7 +1450,7 @@ async function deleteFile(filename) {
         }
       } else {
         // Main File
-        let id = filename.replace(".png", "");
+        let id = filename.split(".")[0];
         const container = document.querySelector(
           `.file-debug-group[data-id="${id}"]`,
         );
@@ -1500,7 +1539,7 @@ async function uploadNavFile(input) {
         body: JSON.stringify({
           kit: CURRENT_KIT_FOLDER,
           folder: currentPart.part.folder,
-          filename: "nav.png",
+          filename: file.name.startsWith('nav') ? file.name : "nav.png", // Keep original if it's a nav file, otherwise default to png
           file_content: base64Content,
           color: colorParam,
         }),

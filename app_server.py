@@ -87,6 +87,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                          self.send_error(403, "Access denied")
                          return
 
+                    mimetypes.init()
+                    mimetypes.add_type('image/webp', '.webp')
                     content_type, _ = mimetypes.guess_type(full_path)
                     if not content_type:
                         content_type = 'application/octet-stream'
@@ -277,8 +279,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
                 item_indices = []
                 image_indices = [] # Indices of N.png in main folder
-                thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
-                image_pattern = re.compile(r"^(\d+)\.png$")
+                thumb_pattern = re.compile(r"^thumb_(\d+)\.(png|webp)$")
+                image_pattern = re.compile(r"^(\d+)\.(png|webp)$")
                 
                 # Use os.scandir for better performance on network drives
                 colors = []
@@ -678,12 +680,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             # 2. If inside a color subfolder, ALSO check the parent (Main) folder for specific files like nav.png or common thumbnails
             if is_subcolor:
                 # Check for nav.png explicitly in parent
-                parent_files_to_check = ["nav.png"]
+                parent_files_to_check = ["nav.png", "nav.webp"]
                 
                 # Also check for ALL thumb_*.png in parent (since thumbnails are usually shared or stored in root)
                 if os.path.exists(struct_base):
                     for entry in os.listdir(struct_base):
-                        if entry == "nav.png" or entry.startswith("thumb_"):
+                        if entry in ["nav.png", "nav.webp"] or entry.startswith("thumb_"):
                              parent_files_to_check.append(entry)
 
                 # Remove duplicates if added strictly
@@ -770,27 +772,42 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(DATA_DIR, kit_folder)
             part_path = safe_join(kit_path, folder_name)
             
-            source_path = safe_join(part_path, "1.png")
-            target_path = safe_join(part_path, "nav.png")
+            # Try to find source image 1.png or 1.webp
+            source_filename = None
+            if os.path.exists(os.path.join(part_path, "1.png")):
+                source_filename = "1.png"
+            elif os.path.exists(os.path.join(part_path, "1.webp")):
+                source_filename = "1.webp"
 
-            # Nếu không thấy 1.png ở root, thử tìm ở folder màu đầu tiên (nếu có)
-            if not os.path.exists(source_path):
-                for entry in os.listdir(part_path):
+            source_path = os.path.join(part_path, source_filename) if source_filename else None
+
+            # If not found in root, look in first color folder
+            if not source_path or not os.path.exists(source_path):
+                for entry in sorted(os.listdir(part_path)):
                     sub_path = os.path.join(part_path, entry)
                     if os.path.isdir(sub_path):
-                        test_path = os.path.join(sub_path, "1.png")
-                        if os.path.exists(test_path):
-                            source_path = test_path
+                        if os.path.exists(os.path.join(sub_path, "1.png")):
+                            source_path = os.path.join(sub_path, "1.png")
+                            source_filename = "1.png"
+                            break
+                        elif os.path.exists(os.path.join(sub_path, "1.webp")):
+                            source_path = os.path.join(sub_path, "1.webp")
+                            source_filename = "1.webp"
                             break
 
-            if not os.path.exists(source_path):
-                self.send_api_response(False, "Không tìm thấy file 1.png để làm nav")
+            if not source_path or not os.path.exists(source_path):
+                self.send_api_response(False, "Không tìm thấy file 1.png hoặc 1.webp để làm nav")
                 return
             
-            # Copy 1.png to nav.png
+            # Determine target filename (nav.png or nav.webp) based on source
+            ext = os.path.splitext(source_filename)[1].lower() # .png or .webp
+            target_filename = f"nav{ext}"
+            target_path = os.path.join(part_path, target_filename)
+            
+            # Copy source to nav
             shutil.copy2(source_path, target_path)
             
-            self.send_api_response(True, f"Đã tạo nav.png từ 1.png")
+            self.send_api_response(True, f"Đã tạo {target_filename} từ {source_filename}")
 
         except Exception as e:
             self.send_api_response(False, f"Lỗi khi tạo nav: {str(e)}")
@@ -1187,21 +1204,24 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             root_files = os.listdir(target_dir)
             indices = []
             for f in root_files:
-                if f.endswith('.png'):
-                    match = re.search(r"^(\d+)\.png$", f)
-                    if match: indices.append(int(match.group(1)))
+                match = re.search(r"^(\d+)\.(png|webp)$", f) # Support webp
+                if match: indices.append(int(match.group(1)))
             
             next_idx = max(indices) + 1 if indices else 1
             moved_count = 0
 
             for old_path in images_to_move:
-                new_fn = f"{next_idx}.png"
+                # Determine original extension
+                _, ext = os.path.splitext(old_path)
+                ext = ext.lstrip('.') # Remove leading dot
+
+                new_fn = f"{next_idx}.{ext}"
                 new_path = os.path.join(target_dir, new_fn)
                 
                 # Check if new_path exists (unlikely given logic)
                 while os.path.exists(new_path):
                     next_idx += 1
-                    new_fn = f"{next_idx}.png"
+                    new_fn = f"{next_idx}.{ext}"
                     new_path = os.path.join(target_dir, new_fn)
                 
                 shutil.move(old_path, new_path)
@@ -1289,7 +1309,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
             files = []
             for f in os.listdir(target_dir):
-                if f.endswith('.png') and f != 'nav.png' and not f.startswith('thumb_'):
+                if f.lower().endswith(('.png', '.webp')) and not f.startswith('nav.') and not f.startswith('thumb_'): # Support webp
                     match = re.search(r"(\d+)", f)
                     order = int(match.group(1)) if match else 999
                     
@@ -1436,7 +1456,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         new_color = data.get('new_color')
 
         if not kit_folder or not part_folder or not old_color or not new_color:
-            self.send_api_response(False, "Missing parameters")
+            self.send_api_response(False, "Missing parameters (kit, part_folder, colors)")
             return
         
         if old_color == 'default':
@@ -1584,8 +1604,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             # Walk the directory
             for root, dirs, files in os.walk(entry_path):
                 for filename in files:
-                    # Check for N.png
-                    match = re.match(r"^(\d+)\.png$", filename)
+                    # Check for N.png or N.webp
+                    match = re.match(r"^(\d+)\.(png|webp)$", filename, re.IGNORECASE)
                     if match:
                         num = match.group(1)
                         # If we haven't found a source for this number yet, record it
@@ -1595,7 +1615,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
             # Now process the found images
             for num, source_path in found_images.items():
-                thumb_name = f"thumb_{num}.png"
+                thumb_name = f"thumb_{num}.png" # Thumbs are always PNG
                 thumb_path = os.path.join(entry_path, thumb_name)
                 
                 results["total_images"] += 1
@@ -1657,7 +1677,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             entry_path = os.path.join(kit_path, entry)
             
             # Find all thumb_*.png files
-            thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
+            thumb_pattern = re.compile(r"^thumb_(\d+)\.(png|webp)$", re.IGNORECASE) # Support webp
             for filename in os.listdir(entry_path):
                 if thumb_pattern.match(filename):
                     file_path = os.path.join(entry_path, filename)
@@ -1693,8 +1713,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             if not os.path.exists(color_path):
                 return self.send_api_response(False, f"Color folder not found: {color}")
 
-            # Find all N.png files in the color folder
-            image_pattern = re.compile(r"^(\d+)\.png$")
+            # Find all N.png or N.webp files in the color folder
+            image_pattern = re.compile(r"^(\d+)\.(png|webp)$", re.IGNORECASE)
             processed_count = 0
             
             for filename in os.listdir(color_path):
@@ -1702,7 +1722,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 if match:
                     num = match.group(1)
                     source_path = os.path.join(color_path, filename)
-                    target_path = os.path.join(part_path, f"thumb_{num}.png")
+                    target_path = os.path.join(part_path, f"thumb_{num}.png") # Thumbs are always PNG
 
                     try:
                         with Image.open(source_path) as img:
@@ -1743,7 +1763,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             
             # Target directory logic
             target_dir = struct_base
-            if color and color != 'default' and filename != 'nav.png':
+            if color and color != 'default' and not filename.startswith('nav.'): # nav.png/webp always in root
                  target_dir = safe_join(struct_base, color)
                  if not os.path.exists(target_dir):
                      os.makedirs(target_dir)
@@ -1815,8 +1835,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     self.send_api_response(False, f"Target directory not found: {target_dir}")
                     return
 
-            image_pattern = re.compile(r"^(\d+)\.png$")
-            thumb_pattern = re.compile(r"^thumb_(\d+)\.png$")
+            image_pattern = re.compile(r"^(\d+)\.(png|webp)$", re.IGNORECASE) # Support webp
+            thumb_pattern = re.compile(r"^thumb_(\d+)\.(png|webp)$", re.IGNORECASE) # Support webp
 
             processed_dirs = 0
             
