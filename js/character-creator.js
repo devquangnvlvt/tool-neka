@@ -2532,6 +2532,7 @@ async function createPartThumbs() {
       alert(
         `✅ Hoàn tất!\n\n✨ Đã tạo thêm: ${result.stats.created_thumbs} thumb.`,
       );
+      imgVers = Date.now(); // Cập nhật version để xóa cache ảnh
       loadItems(currentPart.part); // Refresh item grid
     } else {
       alert("❌ Lỗi: " + result.message);
@@ -2574,6 +2575,7 @@ async function deletePartThumbs() {
 
     if (result.success) {
       alert(`✅ Đã xóa xong thumbnail của "${folderName}".`);
+      imgVers = Date.now(); // Cập nhật version để xóa cache ảnh
       loadItems(currentPart.part); // Refresh item grid
     } else {
       alert("❌ Lỗi: " + result.message);
@@ -2792,6 +2794,7 @@ async function confirmBatchCrop() {
     if (result.success) {
       alert(`✅ Hoàn tất: ${result.message}`);
       closeCropModal();
+      imgVers = Date.now(); // Cập nhật version để xóa cache ảnh
       loadItems(currentPart.part); // Refresh UI
     } else {
       alert("❌ Lỗi: " + result.message);
