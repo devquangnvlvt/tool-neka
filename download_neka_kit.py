@@ -22,7 +22,7 @@ try:
     from webdriver_manager.chrome import ChromeDriverManager
 except ImportError:
     webdriver = None
-    print("Warning: Selenium or webdriver-manager not found. Some features may be disabled.")
+    pass
 
 
 import concurrent.futures
@@ -115,7 +115,6 @@ def apply_gradient(image_path, lut, output_path):
         res_img.putalpha(a)
         res_img.save(output_path)
     except Exception as e:
-        print(f"Error coloring {image_path}: {e}")
         shutil.copy2(image_path, output_path)
 
 
@@ -199,10 +198,9 @@ def decompress(val, vocab, cache):
 
 def get_clean_data_via_browser(url, output_file):
     if not webdriver:
-        print("Error: Selenium is not installed.")
         return None
 
-    print(f"Launching browser to fetch data from {url}...")
+    pass # Launching browser
     
     chrome_options = Options()
     # Run in headless mode to avoid popup
@@ -217,12 +215,10 @@ def get_clean_data_via_browser(url, output_file):
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
     except Exception as e:
-        print(f"Error initializing Chrome driver: {e}")
         return None
     
     try:
         driver.get(url)
-        print("Waiting for page / data...")
         time.sleep(5) 
         
         script = "return window.__NEXT_DATA__;"
@@ -231,7 +227,6 @@ def get_clean_data_via_browser(url, output_file):
         driver.quit()
         
         if next_data:
-            print("Obtained __NEXT_DATA__, attempting decompression...")
             try:
                 props = next_data.get('props', {}).get('pageProps', {})
                 kit_raw = props.get('kitOnSale')
@@ -241,7 +236,6 @@ def get_clean_data_via_browser(url, output_file):
                     root_str = kit_raw[1]
                     
                     if isinstance(root_str, str):
-                        print(f"Decompressing kit with root: {root_str}")
                         cache = {}
                         root_idx = decode_b62_full(root_str)
                         final_data = decompress(root_idx, vocab, cache)
@@ -249,17 +243,13 @@ def get_clean_data_via_browser(url, output_file):
                         if final_data:
                             with open(output_file, 'w', encoding='utf-8') as f:
                                 json.dump(final_data, f, ensure_ascii=False, indent=2)
-                            print(f"Successfully extracted and decompressed data to {output_file}")
                             return output_file
             except Exception as e:
-                print(f"Decompression failed: {e}")
-                import traceback
-                traceback.print_exc()
+                pass
 
         return None
         
     except Exception as e:
-        print(f"Browser error: {e}")
         try: driver.quit()
         except: pass
         return None
@@ -275,9 +265,9 @@ def download_with_retry(url, dest_path, timeout=30, retries=3):
                     f.write(resp.content)
                 return True
             else:
-                print(f"  [Retry {i+1}/{retries}] Failed {url}: {resp.status_code}")
+                pass
         except Exception as e:
-            print(f"  [Retry {i+1}/{retries}] Error downloading {url}: {e}")
+            pass
         time.sleep(2)
     return False
 
@@ -306,7 +296,6 @@ def process_blob_task(task):
             shutil.copy2(cache_path, filepath)
         return True
     except Exception as e:
-        print(f"  Error processing blob {blob}: {e}")
         return False
 
 # ============= REORGANIZE KIT =============
@@ -395,7 +384,6 @@ def get_color_code_from_filter(filter_data):
     return main_color.replace('#', '').upper()
 
 def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
-    print(f"DEBUG: reorganize_kit called with {metadata_path}, selected_y={selected_y}")
     base_dir = os.path.dirname(metadata_path)
 
     def update_progress(current, total, msg):
@@ -412,7 +400,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                     "status": "processing"
                 }, pf)
         except Exception as e:
-            print(f"Error writing progress: {e}")
+            pass
 
     with open(metadata_path, 'r', encoding='utf-8') as f:
         kit = json.load(f)
@@ -453,7 +441,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
             
         toning_map[t_id] = processed_colors
         
-    print(f"Loaded {len(toning_map)} tonings.")
+    pass # Loaded tonings
     
     # --- New Logic: Calculate strictly sequential X based on drawing order ---
     # 1. Collect sorting info for all parts
@@ -567,7 +555,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
         
         is_flattened = (num_items == 1 and len(colors) > 1)
         
-        print(f"> Processing Part: {folder_name} | Items: {num_items} | Colors: {len(colors)} | Flattened: {is_flattened}")
+        pass # Processing Part
         
         # Download navigation icon (cover image) first
         part_cover = part.get('cover')
@@ -587,7 +575,6 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                     
                     cache_path = os.path.join(cache_dir, f"{part_cover}.png")
                     if not os.path.exists(cache_path):
-                        print(f"  Downloading nav icon {part_cover}...")
                         url = f"https://img2.neka.cc/{part_cover}"
                         resp = requests.get(url, timeout=10)
                         if resp.status_code == 200:
@@ -595,9 +582,8 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                                 f.write(resp.content)
                     
                     shutil.copy2(cache_path, nav_path)
-                    print(f"  ✓ Saved nav icon")
                 except Exception as e:
-                    print(f"  Error downloading nav icon: {e}")
+                    pass
         
         # Download item thumbnails
         base_part_dir = os.path.join(base_dir, folder_name)
@@ -633,10 +619,8 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                                             f.write(resp.content)
                                 
                                 shutil.copy2(cache_path, thumb_path)
-                            except Exception as e:
-                                print(f"  Error downloading thumbnail {item_idx + 1}: {e}")
-        
-        print(f"  ✓ Saved {num_items} thumbnails")
+                            except Exception:
+                                pass
         
         # Merged folder is no longer needed per user request
 
@@ -728,13 +712,11 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                         
                         cache_path = os.path.join(cache_dir, f"{blob}.png")
                         if not os.path.exists(cache_path):
-                            print(f"Downloading blob {blob}...")
                             resp = requests.get(url, timeout=10)
                             if resp.status_code == 200:
                                 with open(cache_path, 'wb') as f_cache:
                                     f_cache.write(resp.content)
                             else:
-                                print(f"Failed to download {url}: {resp.status_code}")
                                 continue
                         
                         if current_lut:
@@ -748,7 +730,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
                         file_counter += 1
                         
                     except Exception as e:
-                        print(f"  Error handling blob {blob}: {e}")
+                        pass
 
                 # Merge logic was removed per user request
 
@@ -758,34 +740,28 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
 
 
     update_progress(len(parts), len(parts), "Hoàn tất!")
-    print(f"Done! Created {total_files} colored files in '{base_dir}'.")
 
 
 # ============= MAIN =============
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("Usage: python download_neka_kit.py <URL or ID>")
-        print("Example: python download_neka_kit.py https://www.neka.cc/composer/12705")
-        print("Example: python download_neka_kit.py 12705")
         sys.exit(1)
     
     arg = sys.argv[1]
     
-    # Check if argument is URL or just ID
     if arg.startswith("http"):
         url = arg
     else:
         url = f"https://www.neka.cc/composer/{arg}"
     
-    print(f"Processing: {url}")
+    pass # Processing URL
     
     # Step 1: Download metadata
     temp_json = "temp_kit_data.json"
     metadata_file = get_clean_data_via_browser(url, temp_json)
     
     if not metadata_file:
-        print("Failed to download metadata.")
         sys.exit(1)
     
     # Step 2: Read metadata to get kit name and ID
@@ -805,25 +781,18 @@ if __name__ == "__main__":
     final_metadata_path = os.path.join(base_dir, "metadata.json")
     shutil.move(temp_json, final_metadata_path)
     
-    print(f"\nKit: {kit_name} (ID: {kit_id})")
-    print(f"Metadata saved to: {final_metadata_path}")
-    
     # Step 4: Reorganize and download images
-    print("\nStarting image download and organization...")
     
     # Handle selective download flag
     is_selective = "--y" in sys.argv
     selected_y = None
     
     if is_selective:
-        print("\n--- SELECTIVE DOWNLOAD MODE ---")
         parts = kit.get('data', {}).get('parts', [])
-        print("Available Layers (Y Indices):")
         for idx, part in enumerate(parts):
             p_name = part.get('name', 'unnamed')
-            print(f" [{idx + 1}] {p_name}")
         
-        print("\nEnter Y indices to download (e.g. 1,3,5-10) or 'all':")
+        # Prompt for input
         user_input = input("> ").strip().lower()
         
         if user_input != 'all' and user_input != '':
@@ -837,12 +806,9 @@ if __name__ == "__main__":
                             selected_y.add(i)
                     else:
                         selected_y.add(int(chunk))
-                print(f"Targeting layers: {sorted(list(selected_y))}")
+                pass # Targeting layers
             except Exception as e:
-                print(f"Invalid input format: {e}. Downloading ALL.")
                 selected_y = None
 
     reorganize_kit(final_metadata_path, selected_y=selected_y, kit_id=kit_id)
-    
-    print(f"\n✓ Complete! Check: {base_dir}/")
 
