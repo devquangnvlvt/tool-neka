@@ -100,6 +100,25 @@ body {
   background: #e0e0e0;
 }
 
+.btn-tiny {
+  padding: 2px 8px;
+  font-size: 10px;
+  text-transform: none;
+  border-radius: 4px;
+}
+
+.sort-controls {
+  display: flex;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.sort-controls .btn.active {
+  background: #3498db;
+  color: white;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;

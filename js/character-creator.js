@@ -13,6 +13,7 @@ let currentColorIndex = 0;
 let characterLayers = {};
 let imgVers = Date.now();
 let showColorThumb = false; // Toggle: hiển thị thumb theo màu
+let partSortType = "y"; // 'x' or 'y'
 
 // Toggle color thumb mode
 function toggleColorThumb(checked) {
@@ -241,7 +242,27 @@ function initializeApp(preserveSelection = false) {
   navContainer.innerHTML = "";
   countLayer.innerHTML = "";
 
-  kitStructure.forEach((part, index) => {
+  // Prepare indices for sorting to maintain part mapping
+  let indices = kitStructure.map((_, i) => i);
+  
+  if (partSortType === "x") {
+    indices.sort((a, b) => {
+      const pA = kitStructure[a];
+      const pB = kitStructure[b];
+      if (pA.x !== pB.x) return pA.x - pB.x;
+      return pA.y - pB.y;
+    });
+  } else {
+    indices.sort((a, b) => {
+      const pA = kitStructure[a];
+      const pB = kitStructure[b];
+      if (pA.y !== pB.y) return pA.y - pB.y;
+      return pA.x - pB.x;
+    });
+  }
+
+  indices.forEach((index) => {
+    const part = kitStructure[index];
     const navIcon = document.createElement("div");
     navIcon.className = "nav-icon";
     navIcon.dataset.partIndex = index;
@@ -320,6 +341,18 @@ function initializeApp(preserveSelection = false) {
     }
   }
   updateFocusUI(); // Initial focus UI update
+}
+
+// Change Part Sort Type
+function changePartSort(type) {
+  partSortType = type;
+  
+  // Update Buttons UI
+  document.getElementById("sort-x-btn").classList.toggle("active", type === "x");
+  document.getElementById("sort-y-btn").classList.toggle("active", type === "y");
+  
+  // Re-initialize app to re-render nav icons
+  initializeApp(true);
 }
 
 // Internal select item for auto-init

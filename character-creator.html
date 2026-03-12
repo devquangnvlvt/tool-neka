@@ -27,8 +27,8 @@
             Reset
           </button>
         </div>
-        <div id="structure-warnings" class="warning-box p-10 m-b-10 font-13 d-none"></div>
-        <div id="separated-layers-info" class="info-box p-15 m-t-10 w-100 text-left d-none">
+        <div id="structure-warnings" class="warning-box p-10 m-b-10 font-13"></div>
+        <div id="separated-layers-info" class="info-box p-15 m-t-10 w-100 text-left">
           <h4 class="m-b-8 font-14">
             🌟 Các bộ phận có layer tách:
           </h4>
@@ -61,7 +61,13 @@
 
         <div id="part-navigation-area" class="part-navigation focus-region">
           <div class="flex-between m-b-15">
-            <h3>Chọn bộ phận <span id="count-layer"></span></h3>
+            <div class="flex-gap-10 align-center">
+              <h3>Chọn bộ phận <span id="count-layer"></span></h3>
+              <div class="sort-controls flex-gap-5">
+                <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')" title="Sắp xếp theo ID bộ phận (Y)">Y</button>
+                <button id="sort-x-btn" class="btn btn-secondary btn-tiny" onclick="changePartSort('x')" title="Sắp xếp theo thứ tự hiển thị (X)">X</button>
+              </div>
+            </div>
             <div>
               <button class="btn btn-blue btn-small" onclick="autoCreateThumbs()">
                 Tạo Thumb Tự Động toàn bộ folder
@@ -85,8 +91,7 @@
               <button id="merge-part-btn" class="btn btn-green btn-small " onclick="mergeLayers()">
                 Ghép layer
               </button>
-              <label id="color-thumb-label" class="color-thumb-toggle "
-                title="Hiển thị thumbnail theo màu đang chọn">
+              <label id="color-thumb-label" class="color-thumb-toggle " title="Hiển thị thumbnail theo màu đang chọn">
                 <input type="checkbox" id="color-thumb-check" onchange="toggleColorThumb(this.checked)">
                 <span>Item màu</span>
               </label>
@@ -165,7 +170,8 @@
             <div class="m-b-10">
               <label class="font-11 text-muted">Màu sắc: <span id="color-value">#FFFFFF</span></label>
               <div class="flex-gap-10">
-                <input type="color" id="color-picker" value="#FFFFFF" class="color-picker-input" oninput="updateColorAdjustment()" />
+                <input type="color" id="color-picker" value="#FFFFFF" class="color-picker-input"
+                  oninput="updateColorAdjustment()" />
                 <button class="btn btn-secondary btn-small" onclick="clearColorTint()">
                   ✖ Xóa màu
                 </button>
@@ -241,7 +247,7 @@
         <div class="crop-modal-layout">
           <!-- Canvas Area -->
           <div class="crop-canvas-wrapper" id="crop-canvas-wrapper">
-          <div class="pos-absolute t-10 r-10 z-10">
+            <div class="pos-absolute t-10 r-10 z-10">
               <button class="btn btn-secondary" onclick="toggleCropBackground()" title="Đổi màu nền (Trắng/Đen)">
                 🌗
               </button>
@@ -303,7 +309,8 @@
         <h3>Danh sách file trong folder</h3>
         <div class="delete-item">
           <div class="flex-wrap m-t-25">
-            <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4" class="debug-input p-8 br-4 w-250px">
+            <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4"
+              class="debug-input p-8 br-4 w-250px">
             <label class="flex-gap-5 text-muted pointer align-center">
               <input type="checkbox" id="batch-delete-all-check" checked class="checkbox-large"> Áp dụng tất
               cả folder màu
