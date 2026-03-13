@@ -12,7 +12,7 @@
 <body>
   <div class="container-full">
     <div class="header">
-      <h6><a href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h1>
+        <h6><a href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h1>
         <h6><a href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h1>
     </div>
 
@@ -50,9 +50,9 @@
                 </div>
               </div>
             </div>
-            <button class="btn btn-brand btn-small" onclick="downloadZip()">
+            <!-- <button class="btn btn-brand btn-small" onclick="downloadZip()">
               📦 Data (ZIP)
-            </button>
+            </button> -->
           </div>
           <select id="kit-selector" onchange="switchKit(this.value)">
             <option value="">Đang tải danh sách...</option>
@@ -140,7 +140,7 @@
       </div>
       <div class="merge-content">
         <div class="layer-library">
-          <h3>📚 Thư viện ảnh</h3>
+          <h3>Danh sách ảnh</h3>
           <p style="font-size: 11px; color: #666; margin-bottom: 10px">
             Bấm vào ảnh để thêm vào danh sách ghép.
           </p>
@@ -157,7 +157,7 @@
           </div>
         </div>
         <div class="stack-manager d-flex flex-column">
-          <h3>🛠️ Thứ tự ghép</h3>
+          <h3> Thứ tự ghép</h3>
           <p style="font-size: 11px; color: #666; margin-bottom: 10px">
             Ảnh bên dưới sẽ nằm đè lên ảnh bên trên.
           </p>
@@ -166,7 +166,7 @@
           <!-- Color Adjustment Panel -->
           <div id="color-adjust-panel" class="color-adjust-box d-none m-t-15 p-15">
             <h4 class="m-0 m-b-10 font-13">
-              🎨 Điều chỉnh màu: <span id="selected-layer-name"></span>
+              Điều chỉnh màu: <span id="selected-layer-name"></span>
             </h4>
 
             <div class="m-b-10">
@@ -187,23 +187,23 @@
 
           <div class="m-t-15">
             <button class="btn btn-secondary w-100 m-b-5" onclick="shuffleStack()">
-              🎲 Random
+              Random
             </button>
             <button class="btn btn-secondary w-100 btn-coral" onclick="clearStack()">
-              🗑️ Xóa hết
+              Xóa hết
             </button>
           </div>
         </div>
 
         <div class="queue-manager d-flex flex-column">
-          <h3>📋 Hàng chờ ghép</h3>
+          <h3> Hàng chờ ghép</h3>
           <p style="font-size: 11px; color: #666; margin-bottom: 10px">
             Danh sách các task sẽ xử lý cùng lúc.
           </p>
-          <div id="merge-queue-list" class="flex-1 overflow-y-auto" style="max-height: 400px;">
+          <div id="merge-queue-list" class="flex-1 overflow-y-auto">
           </div>
           <button id="process-queue-btn" class="btn btn-green w-100 m-t-10" onclick="confirmBatchMerge()" disabled>
-            🚀 Ghép tất cả
+            Ghép tất cả
           </button>
         </div>
       </div>
@@ -219,10 +219,10 @@
         </div>
         <div class="flex-gap-10">
           <button id="add-to-queue-btn" class="btn btn-dark" onclick="addToMergeQueue()">
-            ➕ Thêm vào hàng chờ
+            Thêm vào hàng chờ
           </button>
           <button id="confirm-merge-btn" class="btn btn-green" onclick="confirmMerge()">
-            ⚡ Ghép nhanh
+            Ghép nhanh
           </button>
         </div>
       </div>

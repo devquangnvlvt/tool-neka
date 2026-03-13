@@ -23,8 +23,8 @@ body {
 }
 
 .header {
-  background: #5db5ef;
-  color: white;
+      border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 20px 20px;
   text-align: center;
   justify-content: center;
@@ -32,9 +32,10 @@ body {
   gap: 72px;
 }
 
-.header h1 {
-  font-size: 28px;
+.header h6 a {
   margin-bottom: 5px;
+  color: #000;
+  text-decoration: none;
 }
 
 .header p {
