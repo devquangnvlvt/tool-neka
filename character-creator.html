@@ -12,8 +12,31 @@
 <body>
   <div class="container-full">
     <div class="header">
+      <div style="display: flex; gap: 50px; align-items: center; ">
         <h6><a href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h1>
-        <h6><a href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h1>
+          <h6><a href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h1>
+      </div>
+      <div class="kit-selector-area">
+        <div class="flex-between m-b-5">
+          <div class="flex-gap-8 align-center">
+            <div class="tooltip-container">
+              <!-- <span class="info-icon">?</span> -->
+              <div class="tooltip-text">
+                Đặt tên folder (bộ sưu tập) dùng tiếng việt không dấu, chữ thường, thay khoảng trắng bằng gạch nối
+                (-)
+                hoặc gạch
+                dưới (_), không dùng ký tự đặc biệt.
+              </div>
+            </div>
+          </div>
+          <!-- <button class="btn btn-brand btn-small" onclick="downloadZip()">
+              📦 Data (ZIP)
+              </button> -->
+        </div>
+        <select id="kit-selector" onchange="switchKit(this.value)">
+          <option value="">Đang tải danh sách...</option>
+        </select>
+      </div>
     </div>
 
     <div class="main-content">
@@ -37,32 +60,14 @@
       </div>
 
       <div class="sidebar">
-        <div class="kit-selector-area">
-          <div class="flex-between m-b-5">
-            <div class="flex-gap-8 align-center">
-              <h3>Bộ sưu tập</h3>
-              <div class="tooltip-container">
-                <span class="info-icon">?</span>
-                <div class="tooltip-text">
-                  Đặt tên folder (bộ sưu tập) dùng tiếng việt không dấu, chữ thường, thay khoảng trắng bằng gạch nối (-)
-                  hoặc gạch
-                  dưới (_), không dùng ký tự đặc biệt.
-                </div>
-              </div>
-            </div>
-            <!-- <button class="btn btn-brand btn-small" onclick="downloadZip()">
-              📦 Data (ZIP)
-            </button> -->
-          </div>
-          <select id="kit-selector" onchange="switchKit(this.value)">
-            <option value="">Đang tải danh sách...</option>
-          </select>
-        </div>
+
 
         <div id="part-navigation-area" class="part-navigation focus-region">
           <div class="flex-between m-b-15">
-            <div class="flex-gap-10 align-center">
-              <h3>Chọn bộ phận <span id="count-layer"></span></h3>
+            <div class="flex-gap-10 align-center justify-center">
+              <div>
+                <h3>Chọn bộ phận <span id="count-layer"></span></h3>
+              </div>
               <div class="sort-controls flex-gap-5">
                 <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')"
                   title="Sắp xếp theo ID bộ phận (Y)">Y</button>

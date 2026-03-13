@@ -27,9 +27,10 @@ body {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 20px 20px;
   text-align: center;
-  justify-content: center;
+  justify-content: space-between;
   display: flex;
-  gap: 72px;
+  gap: 70px;
+  margin-top: -20px;
 }
 
 .header h6 a {
@@ -47,7 +48,7 @@ body {
   display: grid;
   grid-template-columns: 1fr 1000px;
   gap: 20px;
-  padding: 30px;
+  padding: 30px 0px 0px 0px;
 }
 
 .canvas-area {
@@ -126,9 +127,6 @@ body {
   gap: 20px;
 }
 
-.kit-selector-area {
-  margin-bottom: 5px;
-}
 
 #kit-selector {
   width: 100%;
@@ -148,13 +146,12 @@ body {
 }
 
 .part-navigation {
-  background: #f8f9fa;
   border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 15px;
 }
 
 .part-navigation h3 {
-  margin-bottom: 15px;
   color: #333;
   font-size: 16px;
 }
@@ -219,8 +216,8 @@ body {
 }
 
 .item-selector {
-  background: #f8f9fa;
   border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 15px;
   max-height: 400px;
   overflow-y: auto;
@@ -310,8 +307,8 @@ body {
 }
 
 .color-selector {
-  background: #f8f9fa;
   border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 15px;
 }
 
