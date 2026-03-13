@@ -1740,6 +1740,7 @@ loadKitsList();
 
 // Merge Workspace State
 let mergeStack = [];
+let mergeQueue = [];
 let mergeFilesList = [];
 let mergeCanvas, mctx;
 
@@ -1828,8 +1829,14 @@ async function mergeLayers() {
 
   // Clear previous state
   mergeStack = [];
+  mergeQueue = [];
   document.getElementById("merge-stack-list").innerHTML = "";
+  const queueList = document.getElementById("merge-queue-list");
+  if (queueList) queueList.innerHTML = "";
   document.getElementById("merge-dest-name").value = "1";
+  const processBtn = document.getElementById("process-queue-btn");
+  if (processBtn) processBtn.disabled = true;
+  
   mctx.clearRect(0, 0, mergeCanvas.width, mergeCanvas.height);
 
   try {
@@ -2191,6 +2198,129 @@ async function confirmMerge() {
   } finally {
     btn.disabled = false;
     btn.textContent = "✅ Lưu";
+  }
+}
+
+function addToMergeQueue() {
+  if (mergeStack.length === 0) {
+    alert("Vui lòng chọn ít nhất một ảnh để thêm vào hàng chờ!");
+    return;
+  }
+
+  const destName =
+    document.getElementById("merge-dest-name").value.trim() ||
+    (mergeQueue.length + 1).toString();
+
+  const task = {
+    destination_name: destName,
+    selected_files: mergeStack.map((f) =>
+      typeof f === "string" ? f : f.filename,
+    ),
+    offsets: mergeStack.reduce((acc, f) => {
+      if (typeof f !== "string" && f.x !== undefined) {
+        acc[f.filename] = { x: f.x, y: f.y };
+      }
+      return acc;
+    }, {}),
+    layer_adjustments: JSON.parse(JSON.stringify(layerColorAdjustments)), // Deep copy
+  };
+
+  mergeQueue.push(task);
+
+  // Clear current stack to prepare for next task
+  mergeStack = [];
+  // Increment destination name for convenience
+  let nextId = parseInt(destName);
+  if (!isNaN(nextId)) {
+    document.getElementById("merge-dest-name").value = (nextId + 1).toString();
+  }
+
+  renderStack();
+  redrawMergePreview();
+  renderMergeQueue();
+}
+
+function renderMergeQueue() {
+  const list = document.getElementById("merge-queue-list");
+  if (!list) return;
+  list.innerHTML = "";
+
+  const btn = document.getElementById("process-queue-btn");
+  if (btn) btn.disabled = mergeQueue.length === 0;
+
+  mergeQueue.forEach((task, idx) => {
+    const item = document.createElement("div");
+    item.className = "stack-item mb-5";
+    item.style.border = "1px dashed #ccc";
+    item.style.padding = "5px";
+    item.style.marginBottom = "5px";
+
+    item.innerHTML = `
+      <div class="flex-between" style="display:flex; justify-content:space-between; align-items:center;">
+        <strong style="font-size: 12px;">#${idx + 1}: ${task.destination_name}.png</strong>
+        <button class="btn btn-tiny btn-red" style="padding: 2px 5px; font-size: 10px;" onclick="removeFromMergeQueue(${idx})">✖</button>
+      </div>
+      <div style="font-size: 10px; color: #777; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+        ${task.selected_files.join(", ")}
+      </div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+function removeFromMergeQueue(index) {
+  mergeQueue.splice(index, 1);
+  renderMergeQueue();
+}
+
+async function confirmBatchMerge() {
+  if (mergeQueue.length === 0) return;
+
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn thực hiện ${mergeQueue.length} lệnh ghép này không?`,
+    )
+  )
+    return;
+
+  const bulkApply = document.getElementById("bulk-apply-check").checked;
+  const btn = document.getElementById("process-queue-btn");
+
+  btn.disabled = true;
+  btn.textContent = "⏳ Đang xử lý...";
+  showLoading(`Đang xử lý ${mergeQueue.length} lệnh ghép...`);
+
+  try {
+    const response = await fetch("/api/batch_merge_layers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        folder: currentPart.part.folder,
+        color: currentColor || "default",
+        tasks: mergeQueue,
+        bulk_apply: bulkApply,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      alert(result.message);
+      mergeQueue = [];
+      closeMergeModal();
+      loadKitStructure(true);
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Lỗi server khi ghép hàng loạt.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🚀 Ghép tất cả";
+    }
+    hideLoading();
   }
 }
 

@@ -64,8 +64,10 @@
             <div class="flex-gap-10 align-center">
               <h3>Chọn bộ phận <span id="count-layer"></span></h3>
               <div class="sort-controls flex-gap-5">
-                <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')" title="Sắp xếp theo ID bộ phận (Y)">Y</button>
-                <button id="sort-x-btn" class="btn btn-secondary btn-tiny" onclick="changePartSort('x')" title="Sắp xếp theo thứ tự hiển thị (X)">X</button>
+                <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')"
+                  title="Sắp xếp theo ID bộ phận (Y)">Y</button>
+                <button id="sort-x-btn" class="btn btn-secondary btn-tiny" onclick="changePartSort('x')"
+                  title="Sắp xếp theo thứ tự hiển thị (X)">X</button>
               </div>
             </div>
             <div>
@@ -192,6 +194,18 @@
             </button>
           </div>
         </div>
+
+        <div class="queue-manager d-flex flex-column">
+          <h3>📋 Hàng chờ ghép</h3>
+          <p style="font-size: 11px; color: #666; margin-bottom: 10px">
+            Danh sách các task sẽ xử lý cùng lúc.
+          </p>
+          <div id="merge-queue-list" class="flex-1 overflow-y-auto" style="max-height: 400px;">
+          </div>
+          <button id="process-queue-btn" class="btn btn-green w-100 m-t-10" onclick="confirmBatchMerge()" disabled>
+            🚀 Ghép tất cả
+          </button>
+        </div>
       </div>
       <div class="merge-footer">
         <div class="flex-1 flex-gap-15 align-center">
@@ -203,9 +217,14 @@
             <input type="checkbox" id="bulk-apply-check" /> Áp dụng tất cả màu
           </label>
         </div>
-        <button id="confirm-merge-btn" class="btn btn-green" onclick="confirmMerge()">
-          ✅ Lưu
-        </button>
+        <div class="flex-gap-10">
+          <button id="add-to-queue-btn" class="btn btn-dark" onclick="addToMergeQueue()">
+            ➕ Thêm vào hàng chờ
+          </button>
+          <button id="confirm-merge-btn" class="btn btn-green" onclick="confirmMerge()">
+            ⚡ Ghép nhanh
+          </button>
+        </div>
       </div>
     </div>
   </div>

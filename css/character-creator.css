@@ -460,9 +460,9 @@ body {
 
 .merge-modal {
   background: #fff;
-  width: 90%;
+  width: 95%;
   height: 90%;
-  max-width: 1200px;
+  max-width: 1400px;
   border-radius: 16px;
   display: flex;
   flex-direction: column;
@@ -482,16 +482,22 @@ body {
 .merge-content {
   flex: 1;
   display: grid;
-  grid-template-columns: 350px 1fr 250px;
+  grid-template-columns: 300px 1fr 250px 250px;
   overflow: hidden;
 }
 
 .layer-library,
-.stack-manager {
+.stack-manager,
+.queue-manager {
   padding: 20px;
   overflow-y: auto;
   border-right: 1px solid #eee;
   background: #fdfdfd;
+}
+
+.queue-manager {
+  border-right: none;
+  border-left: 1px solid #eee;
 }
 
 .preview-pane {
