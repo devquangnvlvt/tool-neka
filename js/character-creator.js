@@ -2207,15 +2207,29 @@ function addToMergeQueue() {
     return;
   }
 
+  const currentFiles = mergeStack.map((f) =>
+    typeof f === "string" ? f : f.filename,
+  );
+
+  // Check if any file is already in the queue
+  for (const task of mergeQueue) {
+    for (const file of currentFiles) {
+      if (task.selected_files.includes(file)) {
+        alert(
+          `Cảnh báo: Ảnh "${file}" đã có trong hàng chờ (Task: ${task.destination_name}.png). \n\nVì ảnh gốc sẽ bị xóa sau khi ghép, bạn không được dùng một ảnh cho nhiều lệnh ghép khác nhau!`,
+        );
+        return;
+      }
+    }
+  }
+
   const destName =
     document.getElementById("merge-dest-name").value.trim() ||
     (mergeQueue.length + 1).toString();
 
   const task = {
     destination_name: destName,
-    selected_files: mergeStack.map((f) =>
-      typeof f === "string" ? f : f.filename,
-    ),
+    selected_files: currentFiles,
     offsets: mergeStack.reduce((acc, f) => {
       if (typeof f !== "string" && f.x !== undefined) {
         acc[f.filename] = { x: f.x, y: f.y };
