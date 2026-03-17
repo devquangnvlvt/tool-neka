@@ -190,6 +190,16 @@ body {
   border-width: 3px;
   box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
 }
+.nav-icon.dragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+.nav-icon.drag-over {
+  border-color: #3498db;
+  border-width: 3px;
+  background: rgba(52, 152, 219, 0.1);
+  transform: scale(1.1);
+}
 
 .nav-icon.separated::after {
   content: "✨";

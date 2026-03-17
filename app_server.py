@@ -164,6 +164,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/batch_delete_reorder': self.handle_batch_delete_reorder,
             '/api/crop_batch_thumbs': self.handle_crop_batch_thumbs,
             '/api/batch_merge_layers': self.handle_batch_merge_layers,
+            '/api/reorder_parts': self.handle_reorder_parts,
         }
 
 
@@ -2024,6 +2025,103 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, f"Lỗi xử lý hàng loạt: {str(e)}")
+
+
+    def handle_reorder_parts(self, data):
+        kit_folder = data.get('kit')
+        renames = data.get('renames') # List of {"old": "...", "new": "..."}
+
+        if not kit_folder or not renames:
+            self.send_api_response(False, "Missing parameters (kit or renames)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            if not os.path.exists(kit_path):
+                self.send_api_response(False, "Kit not found")
+                return
+
+            # 1. Validation: check if all old paths exist
+            for r in renames:
+                old_path = os.path.join(kit_path, r['old'])
+                if not os.path.exists(old_path):
+                    self.send_api_response(False, f"Folder not found: {r['old']}")
+                    return
+
+            # 2. First pass: Rename to temporary names to avoid conflicts (e.g. swapping A and B)
+            temp_renames = []
+            for i, r in enumerate(renames):
+                old_path = os.path.join(kit_path, r['old'])
+                temp_name = f"{r['old']}.{i}.tmp"
+                temp_path = os.path.join(kit_path, temp_name)
+                
+                # If temp path exists (unlikely), find a unique one
+                counter = 0
+                while os.path.exists(temp_path):
+                    temp_name = f"{r['old']}.{i}.{counter}.tmp"
+                    temp_path = os.path.join(kit_path, temp_name)
+                    counter += 1
+                
+                shutil.move(old_path, temp_path)
+                temp_renames.append({"temp": temp_name, "final": r['new']})
+
+                # Also handle merged folder if exists
+                merged_base = os.path.join(kit_path, "items_merged")
+                old_merged = os.path.join(merged_base, r['old'])
+                if os.path.exists(old_merged):
+                    temp_merged = os.path.join(merged_base, f"{r['old']}.{i}.tmp")
+                    shutil.move(old_merged, temp_merged)
+
+            # 3. Second pass: Rename from temporary name to final name
+            for r in temp_renames:
+                temp_path = os.path.join(kit_path, r['temp'])
+                final_path = os.path.join(kit_path, r['final'])
+                
+                # Security: ensure final path doesn't already exist unless it was one of the renamed folders
+                # Because we used .tmp, it should be safe unless there's an unrelated folder with the same name.
+                if os.path.exists(final_path):
+                     # This shouldn't happen if the client sent a valid reordering plan, 
+                     # but let's be safe.
+                     self.send_api_response(False, f"Conflict: Final path {r['final']} already exists")
+                     return
+
+                shutil.move(temp_path, final_path)
+
+                # Also handle merged folder
+                merged_base = os.path.join(kit_path, "items_merged")
+                temp_merged = os.path.join(merged_base, r['temp'])
+                if os.path.exists(temp_merged):
+                    final_merged = os.path.join(merged_base, r['final'])
+                    shutil.move(temp_merged, final_merged)
+
+            # 4. Update separated_layers.json
+            sep_path = os.path.join(kit_path, "separated_layers.json")
+            if os.path.exists(sep_path):
+                try:
+                    with open(sep_path, 'r', encoding='utf-8') as f:
+                        sep_list = json.load(f)
+                    
+                    new_sep_list = []
+                    for item in sep_list:
+                        # Find if this item was renamed
+                        found = False
+                        for r in renames:
+                            if r['old'] == item:
+                                new_sep_list.append(r['new'])
+                                found = True
+                                break
+                        if not found:
+                            new_sep_list.append(item)
+                    
+                    with open(sep_path, 'w', encoding='utf-8') as f:
+                        json.dump(new_sep_list, f, ensure_ascii=False, indent=4)
+                except Exception as e:
+                    print(f"Warning: Failed to update separated_layers.json: {e}")
+
+            self.send_api_response(True, "Reordered successfully")
+
+        except Exception as e:
+            self.send_api_response(False, f"Error during reordering: {str(e)}")
 
 
 # ======================================================

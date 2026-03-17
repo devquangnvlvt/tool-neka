@@ -195,22 +195,20 @@ async function loadKitStructure(preserveSelection = false) {
       imgVers = Date.now(); // Update version to bypass cache
       if (preserveSelection) {
         // If preserving selection, update the existing characterLayers with new metadata
-        // This handles renaming (folderName updates) and sorting (sortOrder updates)
-        Object.keys(characterLayers).forEach((idx) => {
-          const partIndex = parseInt(idx);
-          if (kitStructure[partIndex]) {
-            const newPart = kitStructure[partIndex];
-            const layer = characterLayers[partIndex];
-
-            // Update folder name
-            layer.folderName = newPart.folder;
-
-            // Update sortOrder based on new X
-            // sortOrder = X * 1000 + partIndex
-            layer.sortOrder = newPart.x * 1000 + partIndex;
-          } else {
-            // Part might have been deleted?
-            delete characterLayers[partIndex];
+        // Matches by folderName (more robust during reordering/renaming)
+        const oldLayers = { ...characterLayers };
+        characterLayers = {};
+        
+        kitStructure.forEach((part, newIdx) => {
+          // Find if this part was selected before (by folder name)
+          const oldIdx = Object.keys(oldLayers).find(
+            (oIdx) => oldLayers[oIdx].folderName === part.folder
+          );
+          
+          if (oldIdx !== undefined) {
+             const layer = oldLayers[oldIdx];
+             layer.sortOrder = part.x * 1000 + newIdx;
+             characterLayers[newIdx] = layer;
           }
         });
       }
@@ -267,6 +265,15 @@ function initializeApp(preserveSelection = false) {
     navIcon.className = "nav-icon";
     navIcon.dataset.partIndex = index;
     navIcon.dataset.folderName = part.folder;
+    navIcon.draggable = true;
+    
+    // Drag and Drop Events
+    navIcon.addEventListener('dragstart', handleNavDragStart);
+    navIcon.addEventListener('dragover', handleNavDragOver);
+    navIcon.addEventListener('dragleave', handleNavDragLeave);
+    navIcon.addEventListener('drop', handleNavDrop);
+    navIcon.addEventListener('dragend', handleNavDragEnd);
+
     if (part.is_separated) {
       navIcon.classList.add("separated");
       navIcon.title = "Bộ phận này có layer tách";
@@ -2982,5 +2989,136 @@ async function confirmBatchCrop() {
   } finally {
     btn.disabled = false;
     btn.textContent = "🚀 Bắt đầu tạo Thumbnail";
+  }
+}
+
+// ================= DRAG & DROP REORDERING =================
+let draggedNavIcon = null;
+
+function handleNavDragStart(e) {
+  draggedNavIcon = this;
+  this.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  // Firefox needs some data to be set
+  e.dataTransfer.setData("text/plain", this.dataset.folderName);
+}
+
+function handleNavDragOver(e) {
+  if (e.preventDefault) {
+    e.preventDefault();
+  }
+  if (draggedNavIcon !== this) {
+    this.classList.add("drag-over");
+  }
+  e.dataTransfer.dropEffect = "move";
+  return false;
+}
+
+function handleNavDragLeave(e) {
+  this.classList.remove("drag-over");
+}
+
+function handleNavDragEnd(e) {
+  document.querySelectorAll(".nav-icon").forEach((icon) => {
+    icon.classList.remove("dragging", "drag-over");
+  });
+  draggedNavIcon = null;
+}
+
+async function handleNavDrop(e) {
+  if (e.stopPropagation) {
+    e.stopPropagation();
+  }
+
+  if (draggedNavIcon && draggedNavIcon !== this) {
+    // Determine move direction
+    const container = document.getElementById("nav-icons");
+    const icons = Array.from(container.querySelectorAll(".nav-icon"));
+    const draggedIdx = icons.indexOf(draggedNavIcon);
+    const dropIdx = icons.indexOf(this);
+
+    if (draggedIdx < dropIdx) {
+      this.after(draggedNavIcon);
+    } else {
+      this.before(draggedNavIcon);
+    }
+
+    // Trigger physical reordering on server
+    await commitPartReorder();
+  }
+
+  return false;
+}
+
+async function commitPartReorder() {
+  const container = document.getElementById("nav-icons");
+  const icons = Array.from(container.querySelectorAll(".nav-icon"));
+  const renames = [];
+
+  // Important: we need to use the current kitStructure to get original X/Y values
+  // but update either X or Y based on the NEW sequence index.
+  icons.forEach((icon, newIndex) => {
+    const partIdx = parseInt(icon.dataset.partIndex);
+    const part = kitStructure[partIdx];
+    const oldName = icon.dataset.folderName;
+
+    let newX = part.x;
+    let newY = part.y;
+
+    const sequenceOrder = newIndex + 1; // 1-based index for naming
+
+    if (partSortType === "x") {
+      newX = sequenceOrder;
+    } else {
+      newY = sequenceOrder;
+    }
+
+    const newName = `${newX}-${newY}`;
+    
+    // We only send renames if the name actually changes
+    if (oldName !== newName) {
+      renames.push({ old: oldName, new: newName });
+    }
+  });
+
+  if (renames.length === 0) return;
+
+  try {
+    showGlobalLoading("Đang lưu thứ tự mới...");
+    
+    // We also need to update characterLayers locally if any currently selected parts are being renamed
+    // so that preservation logic in loadKitStructure works.
+    Object.keys(characterLayers).forEach(idx => {
+       const layer = characterLayers[idx];
+       const r = renames.find(ren => ren.old === layer.folderName);
+       if (r) {
+          layer.folderName = r.new;
+       }
+    });
+
+    const response = await fetch("/api/reorder_parts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        renames: renames,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      // Reload kit structure with preservation
+      // This will rebuild kitStructure and update characterLayers mapping
+      await loadKitStructure(true);
+    } else {
+      alert("Lỗi khi sắp xếp: " + result.message);
+      await loadKitStructure(true); // Revert UI
+    }
+  } catch (error) {
+    console.error("Reorder error:", error);
+    alert("Lỗi kết nối khi sắp xếp bộ phận.");
+    await loadKitStructure(true); // Revert UI
+  } finally {
+    hideGlobalLoading();
   }
 }
