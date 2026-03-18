@@ -16,11 +16,17 @@ let showColorThumb = false; // Toggle: hiển thị thumb theo màu
 let partSortType = "y"; // 'x' or 'y'
 let currentZFilter = "all"; // 'all', '1', '2'
 
+let restoredActivePartFolder = null;
+
 // ---- LocalStorage Persistence ----
 function saveSelectionState() {
   if (!CURRENT_KIT_FOLDER) return;
-  // Serialize only what we need: per-folder item + color
-  const snapshot = {};
+  // Serialize only what we need: per-folder item + color and active part
+  const snapshot = {
+    _meta: {
+      activePartFolder: currentPart ? currentPart.part.folder : null
+    }
+  };
   Object.entries(characterLayers).forEach(([idx, layer]) => {
     if (layer && layer.folderName) {
       snapshot[layer.folderName] = {
@@ -39,6 +45,11 @@ function restoreSelectionState() {
     const raw = localStorage.getItem(`selection_${CURRENT_KIT_FOLDER}`);
     if (!raw) return;
     const snapshot = JSON.parse(raw);
+
+    if (snapshot._meta && snapshot._meta.activePartFolder) {
+      restoredActivePartFolder = snapshot._meta.activePartFolder;
+    }
+
     kitStructure.forEach((part, idx) => {
       const saved = snapshot[part.folder];
       if (saved) {
@@ -399,7 +410,15 @@ function initializeApp(preserveSelection = false) {
   renderCharacter();
 
   // Reselect the part to refresh item grid
-  const targetIdx = preserveSelection ? savedPartIndex : 0;
+  let targetIdx = preserveSelection ? savedPartIndex : 0;
+  
+  // If we have a restored active part folder, find its index
+  if (restoredActivePartFolder) {
+    const foundIdx = kitStructure.findIndex(p => p.folder === restoredActivePartFolder);
+    if (foundIdx !== -1) targetIdx = foundIdx;
+    restoredActivePartFolder = null; // Use it only once per fresh load
+  }
+
   if (kitStructure[targetIdx]) {
     selectPart(targetIdx, kitStructure[targetIdx]);
     // Restore color: first try from characterLayers (restored state), then from savedColorIdx
@@ -521,6 +540,9 @@ function selectPart(index, part) {
 
   // Load colors
   loadColors(part);
+
+  // Save state so active part is remembered
+  saveSelectionState();
 }
 
 // Load items for current part
@@ -1083,6 +1105,17 @@ async function randomizeCharacter() {
 // Reset all layers (select None for all parts)
 function resetAllLayers() {
   characterLayers = {};
+  if (kitStructure) {
+    kitStructure.forEach((part, index) => {
+      characterLayers[index] = {
+        folderName: part.folder,
+        itemNumber: -1,
+        color: "default",
+        colorIndex: 0,
+        sortOrder: part.x * 1000 + index
+      };
+    });
+  }
   renderCharacter();
 
   // Update UI to show all parts as "None" selected
@@ -1092,6 +1125,8 @@ function resetAllLayers() {
   document.querySelectorAll(".item-none").forEach((none) => {
     none.classList.add("active");
   });
+
+  saveSelectionState();
 }
 
 async function downloadZip() {
