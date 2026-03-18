@@ -248,21 +248,20 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 entry_path = os.path.join(structured_dir, entry)
                 if not os.path.isdir(entry_path): continue
                 
-                match = re.match(r"^(\d+)-(\d+)$", entry)
-                
+                match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", entry)
                 if not match:
-                    x, y = 9999, 9999
+                    x, y = 9999, len(parts) + 1
                 else:
                     x = int(match.group(1))
                     y = int(match.group(2))
-                    
+
+                # --- Per-folder Analysis ---
                 # Count layers and items per item from metadata
                 item_layer_counts = {}
                 expected_num_items = 0
                 try:
-                    match_y = re.match(r"^\d+-(\d+)$", entry)
-                    if match_y:
-                        part_idx_for_meta = int(match_y.group(1)) - 1
+                    if match:
+                        part_idx_for_meta = y - 1
                         parts_data = meta_data.get('data', {}).get('parts', [])
                         if 0 <= part_idx_for_meta < len(parts_data):
                             items_meta = parts_data[part_idx_for_meta].get('items', [])
@@ -283,8 +282,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 image_indices = [] # Indices of N.png in main folder
                 thumb_pattern = re.compile(r"^thumb_(\d+)\.(png|webp)$")
                 image_pattern = re.compile(r"^(\d+)\.(png|webp)$")
-                
-                # Use os.scandir for better performance on network drives
                 colors = []
                 try:
                     with os.scandir(entry_path) as it:
@@ -297,13 +294,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                 if m_img: image_indices.append(int(m_img.group(1)))
                             elif entry_file.is_dir():
                                 colors.append(entry_file.name)
-                except Exception as e:
-                    print(f"Error scanning directory {entry_path}: {e}")
+                except: pass
 
-                # Use max of (existing files, expected from metadata)
                 num_items = max(expected_num_items, max(image_indices) if image_indices else 0, max(item_indices) if item_indices else 0)
                 
-                # Check for gaps in N.png (main folder)
                 missing_images = []
                 if not colors and image_indices:
                     max_img = max(image_indices)
@@ -311,8 +305,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         if i not in image_indices:
                             missing_images.append(i)
 
-                color_gaps = {} # color_name -> missing_indices
-                color_image_counts = {} # color_name -> count of X.png files
+                color_gaps = {}
+                color_image_counts = {}
                 if colors:
                     for sub in colors:
                         sub_path = os.path.join(entry_path, sub)
@@ -324,37 +318,30 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                         sm = image_pattern.match(sf_entry.name)
                                         if sm: sub_indices.append(int(sm.group(1)))
                         except: pass
-                        
                         color_image_counts[sub] = len(sub_indices)
-                        
                         if sub_indices:
-                            gaps = []
-                            max_sub = max(sub_indices)
-                            for i in range(1, max_sub + 1):
-                                if i not in sub_indices:
-                                    gaps.append(i)
-                            if gaps:
-                                color_gaps[sub] = gaps
+                            gaps = [i for i in range(1, max(sub_indices) + 1) if i not in sub_indices]
+                            if gaps: color_gaps[sub] = gaps
                 
-                if missing_images or color_gaps:
-                    print(f"  [GAP DETECTED] Folder {entry}: missing_images={missing_images}, color_gaps={list(color_gaps.keys())}")
-
                 parts.append({
-                    "x": x, "y": y, "folder": entry,
-                    "items_count": num_items, "colors": colors,
+                    "x": x, "y": y,
+                    "folder": entry,
+                    "display_name": entry, # Use full entry name
+                    "items_count": num_items,
+                    "colors": colors,
                     "is_separated": entry in separated_folders,
-                    "item_layer_counts": item_layer_counts,
                     "has_colors": len(colors) > 0,
                     "missing_images": missing_images,
                     "color_gaps": color_gaps,
-                    "color_image_counts": color_image_counts
+                    "color_image_counts": color_image_counts,
+                    "item_layer_counts": item_layer_counts
                 })
 
-            # Check for duplicate X values
+            # Check for duplicate X values (on merged parts)
             x_counts = {}
             for p in parts:
                 x = p['x']
-                if x != 9999: # Ignore invalid/non-standard folders
+                if x != 9999:
                     if x not in x_counts: x_counts[x] = []
                     x_counts[x].append(p['folder'])
             
@@ -416,6 +403,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             response = json.dumps({
                 "success": True, "parts": parts,
+                "api_version": "v3-xyz-grouping",
                 "has_separated_layers": len(separated_folders) > 0,
                 "separated_folders": separated_folders,
                 "duplicates": duplicate_warnings,
@@ -438,9 +426,9 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(False, "Missing parameters")
             return
 
-        # Enforce X-Y format
-        if not re.match(r"^\d+-\d+$", new_name):
-            self.send_api_response(False, "Tên mới phải đúng định dạng số X-Y (VD: 100-51) để sắp xếp layer.")
+        # Enforce X-Y(-Z) format
+        if not re.match(r"^\d+-\d+(?:-.*)?$", new_name):
+            self.send_api_response(False, "Tên mới phải đúng định dạng số X-Y (hoặc X-Y-Z) (VD: 100-51-test) để sắp xếp layer.")
             return
 
         try:
@@ -534,10 +522,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(DATA_DIR, kit_folder)
 
             
-            # Get part index from folder name
-            match = re.search(r"-(\d+)$", folder_name)
+            # Get part index from folder name (the second numeric part in X-Y-Z)
+            match = re.match(r"^\d+-(\d+)(?:-.*)?$", folder_name)
             if not match:
-                self.send_api_response(False, "Invalid folder name format")
+                self.send_api_response(False, f"Invalid folder name format: {folder_name}")
                 return
             
             part_idx = int(match.group(1)) - 1
@@ -945,7 +933,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             canvas_width = int(p_conf['w'])
                             canvas_height = int(p_conf['h'])
                         
-                        match = re.search(r"-(\d+)$", folder_name)
+                        match = re.match(r"^\d+-(\d+)(?:-.*)?$", folder_name)
                         if match:
                             p_idx = int(match.group(1)) - 1
                             p_list = p_conf.get('pList', [])
@@ -977,7 +965,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                         canvas_height = c.get('oh', canvas_height)
                                         break
 
-                            match = re.search(r"-(\d+)$", folder_name)
+                            match = re.match(r"^\d+-(\d+)(?:-.*)?$", folder_name)
                             if match:
                                 part_idx = int(match.group(1)) - 1
                                 if 0 <= part_idx < len(parts_data):
@@ -1711,7 +1699,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         else:
             # Original logic: Scan all folders X-Y
             for entry in os.listdir(kit_path):
-                if re.match(r"^\d+-\d+$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
+                if re.match(r"^\d+-\d+(?:-.*)?$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
                     folders_to_scan.append(entry)
         
         for entry in folders_to_scan:
@@ -1796,7 +1784,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         else:
             # Original logic: Scan all folders X-Y
             for entry in os.listdir(kit_path):
-                if re.match(r"^\d+-\d+$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
+                if re.match(r"^\d+-\d+(?:-.*)?$", entry) and os.path.isdir(os.path.join(kit_path, entry)):
                     folders_to_scan.append(entry)
         
         for entry in folders_to_scan:

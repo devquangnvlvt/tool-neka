@@ -121,6 +121,11 @@ body {
   color: white;
 }
 
+.z-filter .btn.active {
+  background: #e67e22;
+  color: white;
+}
+
 .sidebar {
   display: flex;
   flex-direction: column;

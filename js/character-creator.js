@@ -14,6 +14,47 @@ let characterLayers = {};
 let imgVers = Date.now();
 let showColorThumb = false; // Toggle: hiển thị thumb theo màu
 let partSortType = "y"; // 'x' or 'y'
+let currentZFilter = "all"; // 'all', '1', '2'
+
+// ---- LocalStorage Persistence ----
+function saveSelectionState() {
+  if (!CURRENT_KIT_FOLDER) return;
+  // Serialize only what we need: per-folder item + color
+  const snapshot = {};
+  Object.entries(characterLayers).forEach(([idx, layer]) => {
+    if (layer && layer.folderName) {
+      snapshot[layer.folderName] = {
+        itemNumber: layer.itemNumber,
+        color: layer.color,
+        colorIndex: layer.colorIndex || 0,
+      };
+    }
+  });
+  localStorage.setItem(`selection_${CURRENT_KIT_FOLDER}`, JSON.stringify(snapshot));
+}
+
+function restoreSelectionState() {
+  if (!CURRENT_KIT_FOLDER || !kitStructure) return;
+  try {
+    const raw = localStorage.getItem(`selection_${CURRENT_KIT_FOLDER}`);
+    if (!raw) return;
+    const snapshot = JSON.parse(raw);
+    kitStructure.forEach((part, idx) => {
+      const saved = snapshot[part.folder];
+      if (saved) {
+        characterLayers[idx] = {
+          folderName: part.folder,
+          itemNumber: saved.itemNumber,
+          color: saved.color,
+          colorIndex: saved.colorIndex || 0,
+          sortOrder: part.x * 1000 + idx,
+        };
+      }
+    });
+  } catch (e) {
+    console.warn("Could not restore selection state:", e);
+  }
+}
 
 // Toggle color thumb mode
 function toggleColorThumb(checked) {
@@ -213,7 +254,12 @@ async function loadKitStructure(preserveSelection = false) {
         });
       }
 
-      initializeApp(preserveSelection);
+      // On fresh load, restore previously saved selections from localStorage
+      if (!preserveSelection) {
+        restoreSelectionState();
+      }
+
+      initializeApp(preserveSelection || Object.keys(characterLayers).length > 0);
       hideGlobalLoading();
     } else {
       hideGlobalLoading();
@@ -256,6 +302,17 @@ function initializeApp(preserveSelection = false) {
       const pB = kitStructure[b];
       if (pA.y !== pB.y) return pA.y - pB.y;
       return pA.x - pB.x;
+    });
+  }
+
+  // Filter by Z component
+  if (currentZFilter !== "all") {
+    indices = indices.filter(index => {
+      const folder = kitStructure[index].folder;
+      const match = folder.match(/^\d+-\d+-(\d+)/);
+      if (match) return match[1] === currentZFilter;
+      // X-Y folders (no Z) are treated as Z=1 when filter is active
+      return currentZFilter === "1";
     });
   }
 
@@ -302,7 +359,7 @@ function initializeApp(preserveSelection = false) {
 
     const label = document.createElement("div");
     label.className = "label";
-    label.textContent = part.folder;
+    label.textContent = part.display_name || part.folder;
 
     navIcon.appendChild(img);
     navIcon.appendChild(label);
@@ -323,7 +380,6 @@ function initializeApp(preserveSelection = false) {
     navIcon.onclick = () => selectPart(index, part);
 
     navContainer.appendChild(navIcon);
-    countLayer.textContent = `(${kitStructure.length})`;
 
     // If not preserving or if we lost the selection, reset to default if needed
     if (!characterLayers[index] && part.items_count > 0) {
@@ -332,6 +388,13 @@ function initializeApp(preserveSelection = false) {
     }
   });
 
+  // Update count to reflect filtered/total view
+  const totalCount = kitStructure.length;
+  const visibleCount = indices.length;
+  countLayer.textContent = currentZFilter === "all"
+    ? `(${totalCount})`
+    : `(${visibleCount}/${totalCount})`;
+
   // Re-render canvas but keep layers
   renderCharacter();
 
@@ -339,11 +402,16 @@ function initializeApp(preserveSelection = false) {
   const targetIdx = preserveSelection ? savedPartIndex : 0;
   if (kitStructure[targetIdx]) {
     selectPart(targetIdx, kitStructure[targetIdx]);
-    // If we had a specific color, try to keep it
-    if (
-      preserveSelection &&
-      kitStructure[targetIdx].colors.length > savedColorIdx
-    ) {
+    // Restore color: first try from characterLayers (restored state), then from savedColorIdx
+    const restoredLayer = characterLayers[targetIdx];
+    if (restoredLayer && restoredLayer.color) {
+      const colorIdx = kitStructure[targetIdx].colors.indexOf(restoredLayer.color);
+      if (colorIdx !== -1) {
+        selectColor(restoredLayer.color, colorIdx);
+      } else if (kitStructure[targetIdx].colors.length > savedColorIdx) {
+        selectColor(kitStructure[targetIdx].colors[savedColorIdx], savedColorIdx);
+      }
+    } else if (preserveSelection && kitStructure[targetIdx].colors.length > savedColorIdx) {
       selectColor(kitStructure[targetIdx].colors[savedColorIdx], savedColorIdx);
     }
   }
@@ -359,6 +427,15 @@ function changePartSort(type) {
   document.getElementById("sort-y-btn").classList.toggle("active", type === "y");
   
   // Re-initialize app to re-render nav icons
+  initializeApp(true);
+}
+
+// Change Z Filter
+function changeZFilter(z) {
+  currentZFilter = z;
+  document.getElementById("z-all-btn").classList.toggle("active", z === "all");
+  document.getElementById("z-1-btn").classList.toggle("active", z === "1");
+  document.getElementById("z-2-btn").classList.toggle("active", z === "2");
   initializeApp(true);
 }
 
@@ -390,16 +467,14 @@ function selectPart(index, part) {
   document.querySelectorAll(".nav-icon").forEach((icon) => {
     icon.classList.remove("active");
   });
-  document
-    .querySelector(`[data-part-index="${index}"]`)
-    .classList.add("active");
+  const activeIcon = document.querySelector(`[data-part-index="${index}"]`);
+  if (activeIcon) activeIcon.classList.add("active");
 
-  // Update part name
   // Update part name with Rename button
   const nameContainer = document.getElementById("current-part-name");
 
   nameContainer.innerHTML = `
-                ${part.folder}
+                ${part.display_name || part.folder}
                 <div class="btn-group" style="display:inline-flex; gap:5px; margin-left:8px;">
                      <button class="btn" style="padding:2px 6px; font-size:12px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này">✎</button>
                      <button class="btn" style="padding:2px 6px; font-size:12px; background:#3498db;" onclick="showFolderFiles()" title="Xem file trong folder">📂</button>
@@ -643,8 +718,11 @@ async function loadColors(part) {
   document.getElementById("delete-colors-btn").style.display =
     part.colors.length > 0 ? "block" : "none";
 
-  // Select first color by default
-  if (colors.length > 0) {
+  // Restore previously selected color or default to first
+  const savedLayer = currentPart ? characterLayers[currentPart.index] : null;
+  if (savedLayer && savedLayer.color && colors.includes(savedLayer.color)) {
+    selectColor(savedLayer.color, colors.indexOf(savedLayer.color));
+  } else if (colors.length > 0) {
     selectColor(colors[0], 0);
   }
 }
@@ -660,8 +738,15 @@ function selectItem(itemNumber) {
   if (itemNumber === -1) {
     // "None" selected
     document.querySelector(".item-none")?.classList.add("active");
-    delete characterLayers[currentPart.index];
+    characterLayers[currentPart.index] = {
+      folderName: currentPart.part.folder,
+      itemNumber: -1,
+      color: currentColor || "default",
+      colorIndex: currentColorIndex || 0,
+      sortOrder: currentPart.part.x * 1000 + currentPart.index
+    };
     renderCharacter();
+    saveSelectionState();
     return;
   }
 
@@ -692,6 +777,9 @@ function selectItem(itemNumber) {
   } else {
     layerDetailsBtn.style.display = "none";
   }
+
+  // Save state for persistence across reloads
+  saveSelectionState();
 }
 
 // Select color
@@ -723,6 +811,9 @@ function selectColor(colorFolder, colorIndex) {
   }
 
   updateCharacter();
+
+  // Save state for persistence across reloads
+  saveSelectionState();
 }
 
 // Rename Current Color Logic
@@ -871,6 +962,8 @@ async function renderCharacter() {
   // Pre-load all images in parallel
   const loadPromises = sortedLayers.map(async (layer) => {
     const { folderName, color, itemNumber } = layer;
+    if (itemNumber === -1) return null;
+
     let imagePathBase;
     if (color === "default" || !color) {
       imagePathBase = `${KIT_PATH}${folderName}/${itemNumber}`;

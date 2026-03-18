@@ -74,6 +74,11 @@
                 <button id="sort-x-btn" class="btn btn-secondary btn-tiny" onclick="changePartSort('x')"
                   title="Sắp xếp theo thứ tự hiển thị (X)">X</button>
               </div>
+              <div class="z-filter flex-gap-5" style="margin-left:8px; display:inline-flex; background:rgba(0,0,0,0.05); padding:2px; border-radius:6px;">
+                <button id="z-all-btn" class="btn btn-secondary btn-tiny active" onclick="changeZFilter('all')" title="Hiển thị tất cả">All</button>
+                <button id="z-1-btn" class="btn btn-secondary btn-tiny" onclick="changeZFilter('1')" title="Lọc Z=1">1</button>
+                <button id="z-2-btn" class="btn btn-secondary btn-tiny" onclick="changeZFilter('2')" title="Lọc Z=2">2</button>
+              </div>
             </div>
             <div>
               <button class="btn btn-blue btn-small" onclick="autoCreateThumbs()">
@@ -361,7 +366,7 @@
     <div class="spinner"></div>
     <p id="global-loading-message">Đang xử lý...</p>
   </div>
-  <script src="js/character-creator.js"></script>
+  <script src="js/character-creator.js?v=2"></script>
 </body>
 
 </html>
