@@ -7,9 +7,15 @@ import zipfile
 import subprocess
 import re
 import tempfile
-from urllib.parse import urlparse, parse_qs
 import mimetypes
+import base64
+import traceback
+from urllib.parse import urlparse, parse_qs
+from PIL import Image, ImageEnhance
+import numpy as np
 from config import DATA_DIR
+from delete_neka_part import delete_part
+from zip_neka_kit import zip_kit
 
 
 PORT = 8000
@@ -609,7 +615,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(False, "Missing parameters")
             return
         try:
-            from delete_neka_part import delete_part
             success, message = delete_part(kit_folder, int(y_index))
             self.send_api_response(success, message)
         except Exception as e:
@@ -716,7 +721,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             return
 
         try:
-            from PIL import Image
             base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(DATA_DIR, kit_folder)
 
@@ -882,7 +886,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def handle_merge_layers(self, data):
-        from PIL import Image, ImageEnhance
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
         selected_files = data.get('selected_files', [])
@@ -1010,7 +1013,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     gray_img = Image.merge('RGB', (r, g, b)).convert('L')
                     
                     # Create colored version by applying target color with grayscale as intensity
-                    import numpy as np
                     gray_array = np.array(gray_img).astype(float) / 255.0
                     
                     # Apply target color scaled by luminosity
@@ -1142,7 +1144,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(False, str(e))
 
     def handle_batch_merge_layers(self, data):
-        from PIL import Image, ImageEnhance
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
         tasks = data.get('tasks', []) # List of {selected_files, destination_name, layer_adjustments, offsets}
@@ -1172,7 +1173,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         target_b = int(target_color[4:6], 16) if len(target_color) == 6 else 255
                     else: target_r, target_g, target_b = target_color
                     gray_img = Image.merge('RGB', (r, g, b)).convert('L')
-                    import numpy as np
                     gray_array = np.array(gray_img).astype(float) / 255.0
                     r_new = (gray_array * target_r).astype('uint8')
                     g_new = (gray_array * target_g).astype('uint8')
@@ -1233,35 +1233,93 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     return True
                 return False
 
+            # Load metadata for offsets and canvas size
+            canvas_width, canvas_height = 1436, 1902 # Defaults
+            local_offsets = {}
+            try:
+                found_config = False
+                # Check for p_config.json (Picrew)
+                p_config_path = os.path.join(kit_path, "p_config.json")
+                if os.path.exists(p_config_path):
+                    with open(p_config_path, 'r', encoding='utf-8') as f:
+                        p_conf = json.load(f)
+                        if 'w' in p_conf and 'h' in p_conf:
+                            canvas_width = int(p_conf['w'])
+                            canvas_height = int(p_conf['h'])
+                        match = re.match(r"^\d+-(\d+)(?:-.*)?$", folder_name)
+                        if match:
+                            p_idx = int(match.group(1)) - 1
+                            p_list = p_conf.get('pList', [])
+                            if 0 <= p_idx < len(p_list):
+                                part = p_list[p_idx]
+                                part_x = part.get('x', 0)
+                                part_y = part.get('y', 0)
+                                items = part.get('items', [])
+                                for idx, _ in enumerate(items):
+                                   local_offsets[f"{idx + 1}.png"] = {"x": part_x, "y": part_y}
+                                found_config = True
+
+                # Fallback to metadata.json (Neka)
+                if not found_config:
+                    meta_path = os.path.join(kit_path, "metadata.json")
+                    if os.path.exists(meta_path):
+                        with open(meta_path, 'r', encoding='utf-8') as f:
+                            meta = json.load(f)
+                            # Detect canvas size from metadata
+                            parts_data = meta.get('data', {}).get('parts', [])
+                            for p_item in parts_data:
+                                p_items = p_item.get('items', [])
+                                if p_items and p_items[0]:
+                                    f_layer = p_items[0]
+                                    if isinstance(f_layer, list): f_layer = f_layer[0]
+                                    if isinstance(f_layer, dict) and 'crop' in f_layer:
+                                        c = f_layer['crop']
+                                        canvas_width = c.get('ow', canvas_width)
+                                        canvas_height = c.get('oh', canvas_height)
+                                        break
+                            match = re.match(r"^\d+-(\d+)(?:-.*)?$", folder_name)
+                            if match:
+                                part_idx = int(match.group(1)) - 1
+                                if 0 <= part_idx < len(parts_data):
+                                    items = parts_data[part_idx].get('items', [])
+                                    for idx, item_layers in enumerate(items):
+                                       if not isinstance(item_layers, list): item_layers = [item_layers]
+                                       if not item_layers: continue
+                                       first_layer = item_layers[0]
+                                       crop = first_layer.get('crop', {})
+                                       local_offsets[f"{idx + 1}.png"] = {"x": crop.get('x', 0), "y": crop.get('y', 0)}
+            except Exception as e:
+                print(f"[BatchMerge] Metadata/Config error: {e}")
+
             results_count = 0
             is_default = (not color or color == 'default')
-            
-            # Common offsets loading (similar to handle_merge_layers but can be optimized)
-            # For simplicity, we'll rely on offsets passed from frontend per task
             
             for task in tasks:
                 dest_name = task.get('destination_name', '1')
                 selected_files = task.get('selected_files', [])
                 task_layer_adj = task.get('layer_adjustments', {})
-                task_offsets = task.get('offsets', {})
+                task_offsets_frontend = task.get('offsets', {})
                 
+                # Merge: Frontend offsets win, then local detected ones
+                task_offsets = local_offsets.copy()
+                task_offsets.update(task_offsets_frontend)
+
                 target_src = structured_dir
                 if color and color != 'default': target_src = os.path.join(structured_dir, color)
                 
-                if perform_merge(target_src, dest_name, selected_files, is_default, task_layer_adj, task_offsets):
+                if perform_merge(target_src, dest_name, selected_files, is_default, task_layer_adj, task_offsets, canvas_width, canvas_height):
                     results_count += 1
                 
                 if bulk_apply:
                     if not is_default:
-                        perform_merge(structured_dir, dest_name, selected_files, True, task_layer_adj, task_offsets)
+                        perform_merge(structured_dir, dest_name, selected_files, True, task_layer_adj, task_offsets, canvas_width, canvas_height)
                     for d in os.listdir(structured_dir):
                         sub = os.path.join(structured_dir, d)
                         if os.path.isdir(sub) and (not color or d != color):
-                            perform_merge(sub, dest_name, selected_files, False, task_layer_adj, task_offsets)
+                            perform_merge(sub, dest_name, selected_files, False, task_layer_adj, task_offsets, canvas_width, canvas_height)
 
             self.send_api_response(True, f"Đã hoàn thành {len(tasks)} lệnh ghép trong {results_count} thư mục.")
         except Exception as e:
-            import traceback
             traceback.print_exc()
             self.send_api_response(False, f"Batch Merge Error: {str(e)}")
 
@@ -1469,7 +1527,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             self.send_api_response(False, "Invalid kit name")
             return
         try:
-            from zip_neka_kit import zip_kit
             zip_path = zip_kit(kit_folder)
             
             if not zip_path or not os.path.exists(zip_path):
@@ -1494,7 +1551,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             # If we already started sending headers, this might tail-fail, but usually okay for small zips
             print(f"Zip Kit Error: {e}")
-            import traceback
             traceback.print_exc()
             try: self.send_api_response(False, f"Server Error creating zip: {str(e)}")
             except: pass
@@ -1559,7 +1615,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_api_response(False, f"Lỗi khi chạy script tải: {e}")
             except Exception as e:
                 print(f"Download handler error: {e}")
-                import traceback
                 traceback.print_exc()
                 self.send_api_response(False, f"Server error: {str(e)}")
 
@@ -1670,7 +1725,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
 
     def handle_auto_create_thumbs(self, data):
-        from PIL import Image
         kit_folder = data.get('kit')
         if not kit_folder or not validate_id(kit_folder):
             return self.send_api_response(False, "Invalid kit parameter")
@@ -1804,7 +1858,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         return self.send_api_response(True, f"Đã xóa thành công {deleted_count} thumbnail.")
 
     def handle_crop_batch_thumbs(self, data):
-        from PIL import Image
         kit_folder = data.get('kit')
         folder_name = data.get('folder') # Part folder
         color = data.get('color')
@@ -1855,7 +1908,6 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             return self.send_api_response(False, f"Lỗi phía server: {str(e)}")
 
     def handle_upload_file(self, data):
-        import base64
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
         filename = data.get('filename', 'nav.png') # Default or forced
