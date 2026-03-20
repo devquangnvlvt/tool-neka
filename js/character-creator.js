@@ -135,11 +135,23 @@ function renderKitsSelector(kitsToRender) {
     return;
   }
 
+  // Add search placeholder only if search is active
+  const searchInput = document.getElementById("kit-search");
+  if (searchInput && searchInput.value.trim() !== "") {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "-- Chọn kết quả bên dưới --";
+    selector.appendChild(placeholder);
+  }
+
   kitsToRender.forEach((kit) => {
     const option = document.createElement("option");
     option.value = kit.folder;
     option.textContent = kit.name;
-    if (kit.folder === currentValue) option.selected = true;
+    // Highlight if search is empty OR it matches current kit
+    if (!searchInput || searchInput.value.trim() === "") {
+        if (kit.folder === currentValue) option.selected = true;
+    }
     selector.appendChild(option);
   });
 }
@@ -169,6 +181,13 @@ function switchKit(folderName) {
 
   // Save to localStorage
   localStorage.setItem("selectedKit", folderName);
+
+  // Clear search if any
+  const searchInput = document.getElementById("kit-search");
+  if (searchInput) {
+    searchInput.value = "";
+    renderKitsSelector(kits); // Restore full list
+  }
 
   // Clear current kit structure to trigger fresh load
   kitStructure = null;
