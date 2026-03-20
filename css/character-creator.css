@@ -23,14 +23,14 @@ body {
 }
 
 .header {
-      border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   padding: 20px 20px;
   text-align: center;
   justify-content: space-between;
   display: flex;
   gap: 70px;
-  margin-top: -20px;
+  margin-top: -10px;
 }
 
 .header h6 a {
@@ -138,12 +138,43 @@ body {
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ddd;
-  background: #f9f9f9;
+  background: #fff;
   font-size: 14px;
   color: #333;
   outline: none;
   cursor: pointer;
   transition: border-color 0.3s;
+}
+
+.kit-selector-area {
+  min-width: 300px;
+}
+
+.kit-search-container {
+  width: 100%;
+}
+
+.kit-search-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  background: #fdfdfd;
+  font-size: 14px;
+  color: #333;
+  outline: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.kit-search-input:focus {
+  border-color: #667eea;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+}
+
+.kit-search-input::placeholder {
+  color: #aaa;
 }
 
 #kit-selector:focus {

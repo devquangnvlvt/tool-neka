@@ -108,16 +108,7 @@ async function loadKitsList() {
         CURRENT_KIT_FOLDER = kitToSelect.folder;
         KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
 
-        const selector = document.getElementById("kit-selector");
-        selector.innerHTML = "";
-
-        kits.forEach((kit) => {
-          const option = document.createElement("option");
-          option.value = kit.folder;
-          option.textContent = kit.name;
-          if (kit.folder === CURRENT_KIT_FOLDER) option.selected = true;
-          selector.appendChild(option);
-        });
+        renderKitsSelector(kits);
       }
 
       loadKitStructure();
@@ -127,6 +118,46 @@ async function loadKitsList() {
   } catch (error) {
     console.error("Error loading kits list:", error);
   }
+}
+
+// Render Kits Selector
+function renderKitsSelector(kitsToRender) {
+  const selector = document.getElementById("kit-selector");
+  const currentValue = selector.value || CURRENT_KIT_FOLDER;
+  
+  selector.innerHTML = "";
+
+  if (kitsToRender.length === 0) {
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = "Không tìm thấy kết quả";
+    selector.appendChild(opt);
+    return;
+  }
+
+  kitsToRender.forEach((kit) => {
+    const option = document.createElement("option");
+    option.value = kit.folder;
+    option.textContent = kit.name;
+    if (kit.folder === currentValue) option.selected = true;
+    selector.appendChild(option);
+  });
+}
+
+// Filter Kits
+function filterKits(query) {
+  const searchTerm = query.toLowerCase().trim();
+  if (!searchTerm) {
+    renderKitsSelector(kits);
+    return;
+  }
+
+  const filtered = kits.filter(kit => 
+    kit.name.toLowerCase().includes(searchTerm) || 
+    kit.folder.toLowerCase().includes(searchTerm)
+  );
+
+  renderKitsSelector(filtered);
 }
 
 // Switch Kit
