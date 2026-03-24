@@ -1,5 +1,6 @@
 import http.server
 import socketserver
+import socket
 import json
 import os
 import shutil
@@ -48,6 +49,19 @@ def validate_id(id_str):
     if not id_str: return False
     return bool(re.match(r"^[a-zA-Z0-9_\-\.]+$", str(id_str)))
 
+def get_local_ip():
+    """Gets the local IP address of the machine."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # doesn't even have to be reachable
+        s.connect(('10.255.255.255', 1))
+        IP = s.getsockname()[0]
+    except Exception:
+        IP = '127.0.0.1'
+    finally:
+        s.close()
+    return IP
+
 # ======================================================
 
 class KitHandler(http.server.SimpleHTTPRequestHandler):
@@ -73,6 +87,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.handle_zip_kit({"kit": kit_folder})
             else:
                 self.send_api_response(False, "Missing kit parameter")
+            return
+        
+        elif parsed_path.path == '/api/get_ip':
+            self.send_api_response(True, "Current IP retrieved", {"ip": get_local_ip()})
             return
         
         # Static file proxy for DATA_DIR

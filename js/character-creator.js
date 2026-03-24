@@ -120,6 +120,39 @@ async function loadKitsList() {
   }
 }
 
+// Fetch Server IP
+async function fetchServerIP() {
+  try {
+    const response = await fetch("/api/get_ip");
+    const result = await response.json();
+    if (result.success && result.ip) {
+      const display = document.getElementById("server-ip-display");
+      if (display) {
+        display.textContent = `Server IP: ${result.ip}:${window.location.port || '8000'}`;
+      }
+
+      // Replace hardcoded IPs in the header links
+      const linkPicrew = document.getElementById("link-picrew");
+      const linkNeka = document.getElementById("link-neka");
+      
+      if (linkPicrew) {
+        linkPicrew.href = `http://${result.ip}:3000/`;
+      }
+      if (linkNeka) {
+        linkNeka.href = `http://${result.ip}:8000/`; // Keeping it 8000 as per user request snippet
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching server IP:", error);
+  }
+}
+
+// Global initialization
+document.addEventListener("DOMContentLoaded", () => {
+    fetchServerIP();
+    loadKitsList();
+});
+
 // Render Kits Selector
 function renderKitsSelector(kitsToRender) {
   const selector = document.getElementById("kit-selector");
@@ -376,6 +409,8 @@ function initializeApp(preserveSelection = false) {
       return currentZFilter === "1";
     });
   }
+  
+  currentSortedIndices = [...indices];
 
   indices.forEach((index) => {
     const part = kitStructure[index];
@@ -506,6 +541,86 @@ function changeZFilter(z) {
   document.getElementById("z-1-btn").classList.toggle("active", z === "1");
   document.getElementById("z-2-btn").classList.toggle("active", z === "2");
   initializeApp(true);
+}
+
+// Global variable to store indices (needed for shift logic)
+let currentSortedIndices = [];
+
+// Shift Coordinates (X or Y)
+async function shiftCoordinates(delta) {
+  if (!currentPart) {
+    alert("Vui lòng chọn một bộ phận trước!");
+    return;
+  }
+  
+  const type = partSortType; // 'x' or 'y'
+  // Find current position in visual order
+  const startPos = currentSortedIndices.indexOf(currentPart.index);
+  if (startPos === -1) {
+      alert("Không tìm thấy vị trí bộ phận trong danh sách hiển thị.");
+      return;
+  }
+
+  const renames = [];
+  // All parts from startPos to the end of currently visible sorted list
+  for (let i = startPos; i < currentSortedIndices.length; i++) {
+    const partIdx = currentSortedIndices[i];
+    const part = kitStructure[partIdx];
+    
+    // Regex matches X-Y-Z or X-Y
+    const match = part.folder.match(/^(\d+)-(\d+)(?:-(.*))?$/);
+    if (match) {
+      let x = parseInt(match[1]);
+      let y = parseInt(match[2]);
+      const suffix = match[3] ? `-${match[3]}` : "";
+      
+      if (type === 'x') x += delta;
+      else y += delta;
+
+      if (x < 0) x = 0;
+      if (y < 0) y = 0;
+
+      const newFolderName = `${x}-${y}${suffix}`;
+      if (newFolderName !== part.folder) {
+        renames.push({ old: part.folder, new: newFolderName });
+      }
+    }
+  }
+
+  if (renames.length === 0) {
+      alert("Không có thay đổi nào cần thực hiện.");
+      return;
+  }
+
+  const msg = `Bạn có chắc muốn cập nhật ${type.toUpperCase()} (${delta > 0 ? '+' : ''}${delta}) cho các bộ phận từ "${currentPart.part.folder}" về sau (${renames.length} bộ phận)?`;
+  if (!confirm(msg)) return;
+
+  try {
+    showGlobalLoading("Đang cập nhật chỉ số...");
+    const response = await fetch("/api/reorder_parts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kit: CURRENT_KIT_FOLDER, renames })
+    });
+    const result = await response.json();
+    if (result.success) {
+      // Set new folder name for selection restoration
+      const selectedRename = renames.find(r => r.old === currentPart.part.folder);
+      if (selectedRename) {
+        restoredActivePartFolder = selectedRename.new;
+      }
+      
+      await loadKitStructure(true);
+      // Removed alert to keep it smooth, but could add notification
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (error) {
+    console.error("Error shifting coordinates:", error);
+    alert("Lỗi kết nối server.");
+  } finally {
+    hideGlobalLoading();
+  }
 }
 
 // Internal select item for auto-init

@@ -13,8 +13,8 @@
   <div class="container-full">
     <div class="header">
       <div style="display: flex; gap: 50px; align-items: center; ">
-        <h6><a href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h1>
-          <h6><a href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h1>
+        <h6><a id="link-picrew" href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h1>
+          <h6><a id="link-neka" href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h1>
       </div>
       <div class="kit-selector-area">
         <div class="flex-between m-b-5">
@@ -73,10 +73,14 @@
                 <h3>Chọn bộ phận <span id="count-layer"></span></h3>
               </div>
               <div class="sort-controls flex-gap-5">
-                <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')"
-                  title="Sắp xếp theo ID bộ phận (Y)">Y</button>
                 <button id="sort-x-btn" class="btn btn-secondary btn-tiny" onclick="changePartSort('x')"
                   title="Sắp xếp theo thứ tự hiển thị (X)">X</button>
+                <button id="sort-y-btn" class="btn btn-secondary btn-tiny active" onclick="changePartSort('y')"
+                  title="Sắp xếp theo ID bộ phận (Y)">Y</button>
+              </div>
+              <div class="shift-controls flex-gap-5" style="margin-left: 10px;">
+                <button class="btn btn-secondary btn-tiny" onclick="shiftCoordinates(1)" title="Tăng chỉ số hiện tại (+1)">+1</button>
+                <button class="btn btn-secondary btn-tiny" onclick="shiftCoordinates(-1)" title="Giảm chỉ số hiện tại (-1)">-1</button>
               </div>
               <div class="z-filter flex-gap-5"
                 style="margin-left:8px; display:inline-flex; background:rgba(0,0,0,0.05); padding:2px; border-radius:6px;">
@@ -90,10 +94,10 @@
             </div>
             <div>
               <button class="btn btn-blue btn-small" onclick="autoCreateThumbs()">
-                Tạo Thumb Tự Động toàn bộ folder
+                Tạo Thumb toàn bộ
               </button>
               <button class="btn btn-red btn-small m-l-5" onclick="deleteAllThumbs()">
-                Xóa Tất Cả Thumb toàn bộ folder
+                Xóa Thumb toàn bộ
               </button>
             </div>
           </div>
