@@ -2,7 +2,7 @@ import os
 
 # Đường dẫn thư mục dữ liệu mạng (UNC Path)
 # Lưu ý: Chắc chắn rằng máy tính chạy server có quyền truy cập vào đường dẫn này.
-DATA_DIR = r"\\MR-NQC155\data\data-test"
+DATA_DIR = r"D:\web\laragon\www\tool-neka\downloads"
 
 # Đảm bảo thư mục tồn tại (nếu có quyền)
 if not os.path.exists(DATA_DIR):

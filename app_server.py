@@ -189,6 +189,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/crop_batch_thumbs': self.handle_crop_batch_thumbs,
             '/api/batch_merge_layers': self.handle_batch_merge_layers,
             '/api/reorder_parts': self.handle_reorder_parts,
+            '/api/fix_color_code': self.handle_fix_color_code,
+            '/api/fix_all_part_colors': self.handle_fix_all_part_colors,
         }
 
 
@@ -1429,6 +1431,206 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, f"Flatten error: {str(e)}")
+
+    def handle_fix_color_code(self, data):
+        kit_folder = data.get('kit')
+        part_folder = data.get('part_folder')
+        color_folder = data.get('color')
+
+        if not kit_folder or not part_folder or not color_folder or color_folder == "default":
+            self.send_api_response(False, "Missing or invalid parameters")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            target_dir = safe_join(kit_path, part_folder, color_folder)
+
+            if not os.path.exists(target_dir):
+                self.send_api_response(False, "Folder not found")
+                return
+
+            # Find a representative image (usually 1.png)
+            img_files = [f for f in os.listdir(target_dir) if f.lower().endswith(('.png', '.webp'))]
+            if not img_files:
+                self.send_api_response(False, "No images found in folder to analyze.")
+                return
+            
+            # Prefer 1.png if available, otherwise pick the first one
+            rep_img = "1.png" if "1.png" in img_files else img_files[0]
+            img_path = os.path.join(target_dir, rep_img)
+
+            # Analyze color
+            detected_hex = self.get_dominant_color(img_path)
+            if not detected_hex:
+                self.send_api_response(False, "Could not detect color from image (maybe it is too transparent).")
+                return
+
+            if detected_hex.upper() == color_folder.split('_')[0].upper():
+                self.send_api_response(True, f"Mã màu hiện tại ({color_folder}) đã chính xác.", {"detected": detected_hex})
+                return
+
+            # Rename logic
+            new_name = detected_hex.upper()
+            
+            # Check collisions
+            base_part_path = os.path.join(kit_path, part_folder)
+            temp_name = new_name
+            counter = 2
+            while os.path.exists(os.path.join(base_part_path, temp_name)):
+                if temp_name.upper() == color_folder.upper(): # It's the same folder (case insensitive or already matched)
+                    break
+                temp_name = f"{new_name}_{counter}"
+                counter += 1
+            
+            new_name = temp_name
+            
+            if new_name.upper() == color_folder.upper():
+                self.send_api_response(True, f"Mã màu hiện tại ({color_folder}) đã chính xác (chỉ khác hoa/thường).", {"detected": detected_hex})
+                return
+
+            # Physical rename
+            new_path = os.path.join(base_part_path, new_name)
+            shutil.move(target_dir, new_path)
+
+            self.send_api_response(True, f"Đã đổi tên folder từ {color_folder} thành {new_name}", {
+                "old_name": color_folder,
+                "new_name": new_name,
+                "detected": detected_hex
+            })
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Fix color error: {str(e)}")
+
+    def handle_fix_all_part_colors(self, data):
+        kit_folder = data.get('kit')
+        part_folder = data.get('part_folder')
+
+        if not kit_folder or not part_folder:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, part_folder)
+
+            if not os.path.exists(part_path):
+                self.send_api_response(False, "Part folder not found")
+                return
+
+            changes = []
+            errors = []
+            
+            # Scan for color subfolders
+            subfolders = [f for f in os.listdir(part_path) if os.path.isdir(os.path.join(part_path, f))]
+            
+            # Skip architectural folders
+            skip_folders = ["items_merged", "cache_blobs"]
+            
+            # Sort manually for consistent processing
+            subfolders.sort()
+
+            for color_folder in subfolders:
+                if color_folder in skip_folders or color_folder == "default":
+                    continue
+                
+                # Check if it looks like a hex code (or hex_N)
+                # But even if it doesn't, we want to fix it anyway.
+                
+                target_dir = os.path.join(part_path, color_folder)
+                
+                # Find image
+                img_files = [f for f in os.listdir(target_dir) if f.lower().endswith(('.png', '.webp'))]
+                if not img_files:
+                    continue # Empty or non-image folder
+                
+                rep_img = "1.png" if "1.png" in img_files else img_files[0]
+                img_path = os.path.join(target_dir, rep_img)
+                
+                detected_hex = self.get_dominant_color(img_path)
+                if not detected_hex:
+                    errors.append(f"{color_folder}: Could not detect color")
+                    continue
+                
+                if detected_hex.upper() == color_folder.split('_')[0].upper():
+                    continue # Correct already
+                
+                new_name = detected_hex.upper()
+                
+                # Collision handling
+                temp_name = new_name
+                counter = 2
+                while os.path.exists(os.path.join(part_path, temp_name)):
+                    if temp_name.upper() == color_folder.upper():
+                        break
+                    temp_name = f"{new_name}_{counter}"
+                    counter += 1
+                
+                new_name = temp_name
+                
+                if new_name.upper() == color_folder.upper():
+                    continue
+
+                # Rename
+                new_path = os.path.join(part_path, new_name)
+                try:
+                    shutil.move(target_dir, new_path)
+                    changes.append({"old": color_folder, "new": new_name})
+                except Exception as e:
+                    errors.append(f"{color_folder}: {str(e)}")
+
+            self.send_api_response(True, f"Đã xử lý xong toàn bộ màu của {part_folder}.", {
+                "changes": changes,
+                "errors": errors,
+                "processed_count": len(changes)
+            })
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Fix all colors error: {str(e)}")
+
+    def get_dominant_color(self, image_path):
+        """Analyzes an image to find the most representative (fill) color by ignoring outlines/highlights."""
+        try:
+            with Image.open(image_path) as img:
+                img = img.convert("RGBA")
+                # Resize if the image is unusually large, but Neka parts are usually small
+                pixels = np.array(img)
+                pixels = pixels.reshape(-1, 4)
+                
+                # Filter out transparent pixels (alpha < 50)
+                visible_pixels = pixels[pixels[:, 3] > 50]
+                if len(visible_pixels) == 0:
+                    return None
+                
+                # Get RGB components
+                rgb = visible_pixels[:, :3].astype(np.float32)
+                
+                # Calculate brightness (Sum of RGB)
+                brightness = np.sum(rgb, axis=1)
+                
+                # Sort indices by brightness
+                sort_indices = np.argsort(brightness)
+                
+                # We want to focus on the 'middle' colors (the fill)
+                # Ignore the darkest 20% (usually black/dark outlines)
+                # Ignore the brightest 10% (usually white highlights or near-white)
+                start_idx = int(len(rgb) * 0.20)
+                end_idx = int(len(rgb) * 0.90)
+                
+                if end_idx > start_idx:
+                    fill_pixels = rgb[sort_indices[start_idx:end_idx]]
+                    # Use Median of the fill pixels to get the most representative color
+                    main_color = np.median(fill_pixels, axis=0)
+                else:
+                    # Fallback if too few pixels
+                    main_color = np.median(rgb, axis=0)
+                    
+                hex_color = '{:02X}{:02X}{:02X}'.format(int(main_color[0]), int(main_color[1]), int(main_color[2]))
+                return hex_color
+        except Exception as e:
+            print(f"Color detection error: {e}")
+            return None
 
     def handle_list_part_images(self, data):
         kit_folder = data.get('kit')

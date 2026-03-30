@@ -840,7 +840,9 @@ async function loadColors(part) {
   controlsDiv.innerHTML = `
                 <span style="font-weight:bold;">Màu sắc (${colorCount})</span>
                 <div style="display: flex; gap: 5px;">
+                    <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
+                    <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
                     <button id="delete-colors-btn" onclick="confirmDeleteColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 4px;">Xóa màu đã chọn (F)</button>
                 </div>
             `;
@@ -983,12 +985,18 @@ function selectColor(colorFolder, colorIndex) {
 
   // Handle Rename Button Visibility
   const renameBtn = document.getElementById("rename-color-btn");
+  const fixColorBtn = document.getElementById("fix-color-btn");
   if (renameBtn) {
     if (colorFolder && colorFolder !== "default") {
       renameBtn.style.display = "block";
       renameBtn.title = `Đổi tên folder: ${colorFolder}`;
+      if (fixColorBtn) {
+        fixColorBtn.style.display = "block";
+        fixColorBtn.textContent = "Fix màu này"; // Distinguish from 'all'
+      }
     } else {
       renameBtn.style.display = "none";
+      if (fixColorBtn) fixColorBtn.style.display = "none";
     }
   }
 
@@ -1059,6 +1067,110 @@ async function renameCurrentColor() {
     }
   } catch (e) {
     alert("Lỗi server: " + e);
+  }
+}
+
+// Fix Current Color Code Automatically
+async function fixCurrentColorCode() {
+  if (!currentPart || !currentColor || currentColor === "default") return;
+
+  showLoading(true, `Đang phân tích màu trong folder "${currentColor}"...`);
+
+  try {
+    const response = await fetch("/api/fix_color_code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        part_folder: currentPart.part.folder,
+        color: currentColor,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      if (result.new_name) {
+        const oldName = currentColor;
+        const newName = result.new_name;
+
+        // Update local data
+        const index = currentPart.part.colors.indexOf(oldName);
+        if (index !== -1) {
+          currentPart.part.colors[index] = newName;
+        }
+
+        // Update characterLayers
+        if (
+          characterLayers[currentPart.index] &&
+          characterLayers[currentPart.index].color === oldName
+        ) {
+          characterLayers[currentPart.index].color = newName;
+        }
+
+        // Re-load UI
+        loadColors(currentPart.part);
+        setTimeout(() => selectColor(newName, index), 50);
+        renderCharacter();
+        
+        console.log(`Đã sửa mã màu: ${oldName} -> ${newName} (${result.detected})`);
+      } else {
+        alert(result.message);
+      }
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (e) {
+    alert("Lỗi kết nối: " + e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Fix ALL color codes in current part
+async function fixAllPartColorCodes() {
+  if (!currentPart) return;
+
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn quét và tự động sửa tên TOÀN BỘ (${currentPart.part.colors.length}) folder màu trong bộ phận "${currentPart.part.folder}"?`,
+    )
+  ) {
+    return;
+  }
+
+  showLoading(true, `Đang xử lý toàn bộ folder màu của "${currentPart.part.folder}"...`);
+
+  try {
+    const response = await fetch("/api/fix_all_part_colors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        part_folder: currentPart.part.folder,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      if (result.processed_count > 0) {
+        // Success with changes
+        await switchKit(CURRENT_KIT_FOLDER); // This re-fetches everything
+        
+        let msg = `Đã sửa xong ${result.processed_count} mã màu.`;
+        if (result.errors && result.errors.length > 0) {
+          msg += `\nLỗi tại: ${result.errors.join(", ")}`;
+        }
+        alert(msg);
+      } else {
+        alert("Tất cả mã màu đều đã chính xác!");
+      }
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (e) {
+    alert("Lỗi kết nối: " + e);
+  } finally {
+    hideLoading();
   }
 }
 
