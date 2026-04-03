@@ -1631,7 +1631,7 @@ async function showFolderFiles() {
             navContainer.innerHTML += `
                                     <div class="file-debug-slot" title="${group.main.name}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:center;">
                                         <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain; background:rgba(255,255,255,0.1); border-radius:4px;">
-                                        <div style="margin-top:5px;">${group.main.name}</div>
+                                        <div style="margin-top:5px;color:white">${group.main.name}</div>
                                         <div style="margin-top:8px; display:flex; justify-content:center; width:100%;">
                                             <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;"> Xóa</button>
                                         </div>
@@ -1669,7 +1669,7 @@ async function showFolderFiles() {
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : ""}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:grab;">
                                     <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain; pointer-events: none;">
-                                    <span>${group.main.name}</span>
+                                    <span style="color:white; font-size:12px;">${group.main.name}</span>
                                 </div>
                              `;
         } else {
@@ -1690,7 +1690,7 @@ async function showFolderFiles() {
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : thumbName}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; position:relative;">
                                     <img src="${group.thumb.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
-                                    <span>${thumbName}</span>
+                                    <span style="color:white; font-size:12px;">${thumbName}</span>
                                     
                                     <!-- Controls -->
                                     <div style="margin-top:5px; display:flex; gap:5px;">
@@ -1805,7 +1805,7 @@ async function createThumbnail(sourceName, targetName) {
           thumbSlot.title = targetName;
           thumbSlot.innerHTML = `
                                 <img src="${url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
-                                <span>${targetName}</span>
+                                <span style="color:white; font-size:12px;">${targetName}</span>
                                 
                                 <div style="margin-top:5px; display:flex; gap:5px;">
                                     <button onclick="renameFile('${targetName}')" title="Đổi tên" style="cursor:pointer; border:none; background:#f39c12; color:white; border-radius:3px; padding:2px 5px;">✏️</button>
@@ -3183,12 +3183,23 @@ async function createPartNav() {
   }
 
   const folderName = currentPart.part.folder;
+  const itemNo = currentItem;
+  const colorFolder = currentColor || "default";
 
-  if (!confirm(`Tạo nav.png cho bộ phận "${folderName}" từ file 1.png?`)) {
+  if (itemNo === null || itemNo === -1) {
+    alert("Vui lòng chọn một Item (ảnh) để làm Nav!");
     return;
   }
 
-  showGlobalLoading(`Đang tạo nav.png cho ${folderName}...`);
+  if (
+    !confirm(
+      `Tạo Nav cho bộ phận "${folderName}" từ Item #${itemNo} (Màu: ${colorFolder})?`,
+    )
+  ) {
+    return;
+  }
+
+  showGlobalLoading(`Đang tạo Nav cho ${folderName}...`);
 
   try {
     const response = await fetch("/api/create_nav", {
@@ -3197,6 +3208,8 @@ async function createPartNav() {
       body: JSON.stringify({
         kit: CURRENT_KIT_FOLDER,
         folder: folderName,
+        item_number: itemNo,
+        color: colorFolder,
       }),
     });
 
@@ -3212,7 +3225,9 @@ async function createPartNav() {
         `[data-part-index="${currentPart.index}"] img`,
       );
       if (navIconImg) {
-        navIconImg.src = `${KIT_PATH}${folderName}/nav.png?v=${imgVers}`;
+        // Sử dụng tên file thực tế từ server trả về (nav.png hoặc nav.webp)
+        const filename = result.filename || "nav.png";
+        navIconImg.src = `${KIT_PATH}${folderName}/${filename}?v=${imgVers}`;
         navIconImg.style.display = "block";
       }
     } else {

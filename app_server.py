@@ -777,6 +777,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
     def handle_create_nav(self, data):
         kit_folder = data.get('kit')
         folder_name = data.get('folder')
+        item_number = data.get('item_number')
+        color = data.get('color')
 
         if not kit_folder or not folder_name:
             self.send_api_response(False, "Missing parameters")
@@ -786,42 +788,65 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             kit_path = safe_join(DATA_DIR, kit_folder)
             part_path = safe_join(kit_path, folder_name)
             
-            # Try to find source image 1.png or 1.webp
+            source_path = None
             source_filename = None
-            if os.path.exists(os.path.join(part_path, "1.png")):
-                source_filename = "1.png"
-            elif os.path.exists(os.path.join(part_path, "1.webp")):
-                source_filename = "1.webp"
 
-            source_path = os.path.join(part_path, source_filename) if source_filename else None
-
-            # If not found in root, look in first color folder
-            if not source_path or not os.path.exists(source_path):
-                for entry in sorted(os.listdir(part_path)):
-                    sub_path = os.path.join(part_path, entry)
-                    if os.path.isdir(sub_path):
-                        if os.path.exists(os.path.join(sub_path, "1.png")):
-                            source_path = os.path.join(sub_path, "1.png")
-                            source_filename = "1.png"
+            # 1. Nếu có item_number cụ thể
+            if item_number:
+                search_id = str(item_number)
+                # Thử tìm trong color folder (nếu có chọn màu)
+                if color and color != 'default':
+                    color_path = os.path.join(part_path, color)
+                    if os.path.exists(color_path):
+                        for ext in ['.png', '.webp']:
+                            if os.path.exists(os.path.join(color_path, search_id + ext)):
+                                source_path = os.path.join(color_path, search_id + ext)
+                                source_filename = search_id + ext
+                                break
+                
+                # Nếu không thấy trong color folder, thử ở main folder
+                if not source_path:
+                    for ext in ['.png', '.webp']:
+                        if os.path.exists(os.path.join(part_path, search_id + ext)):
+                            source_path = os.path.join(part_path, search_id + ext)
+                            source_filename = search_id + ext
                             break
-                        elif os.path.exists(os.path.join(sub_path, "1.webp")):
-                            source_path = os.path.join(sub_path, "1.webp")
-                            source_filename = "1.webp"
-                            break
+
+            # 2. Logic cũ (Fallback)
+            if not source_path:
+                if os.path.exists(os.path.join(part_path, "1.png")):
+                    source_path = os.path.join(part_path, "1.png")
+                    source_filename = "1.png"
+                elif os.path.exists(os.path.join(part_path, "1.webp")):
+                    source_path = os.path.join(part_path, "1.webp")
+                    source_filename = "1.webp"
+
+                if not source_path:
+                    for entry in sorted(os.listdir(part_path)):
+                        sub_path = os.path.join(part_path, entry)
+                        if os.path.isdir(sub_path):
+                            if os.path.exists(os.path.join(sub_path, "1.png")):
+                                source_path = os.path.join(sub_path, "1.png")
+                                source_filename = "1.png"
+                                break
+                            elif os.path.exists(os.path.join(sub_path, "1.webp")):
+                                source_path = os.path.join(sub_path, "1.webp")
+                                source_filename = "1.webp"
+                                break
 
             if not source_path or not os.path.exists(source_path):
-                self.send_api_response(False, "Không tìm thấy file 1.png hoặc 1.webp để làm nav")
+                self.send_api_response(False, "Không tìm thấy file ảnh nguồn phù hợp để làm nav")
                 return
             
-            # Determine target filename (nav.png or nav.webp) based on source
-            ext = os.path.splitext(source_filename)[1].lower() # .png or .webp
+            # Determine target filename
+            ext = os.path.splitext(source_filename)[1].lower()
             target_filename = f"nav{ext}"
             target_path = os.path.join(part_path, target_filename)
             
             # Copy source to nav
             shutil.copy2(source_path, target_path)
             
-            self.send_api_response(True, f"Đã tạo {target_filename} từ {source_filename}")
+            self.send_api_response(True, f"Đã tạo {target_filename} từ {source_filename}", {"filename": target_filename})
 
         except Exception as e:
             self.send_api_response(False, f"Lỗi khi tạo nav: {str(e)}")
