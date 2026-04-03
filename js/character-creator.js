@@ -10,6 +10,7 @@ let currentPart = null;
 let currentItem = null;
 let currentColor = null;
 let currentColorIndex = 0;
+let lastColorIndex = null; // Mốc chọn màu gần nhất (chuột trái)
 let characterLayers = {};
 let imgVers = Date.now();
 let showColorThumb = false; // Toggle: hiển thị thumb theo màu
@@ -865,7 +866,31 @@ async function loadColors(part) {
       colorDiv.classList.add("default-color");
     }
 
-    colorDiv.onclick = () => selectColor(colorFolder, index);
+    // Hàm xử lý chọn dải màu (Range Selection)
+    const handleRangeSelection = (idx) => {
+      if (lastColorIndex === null) lastColorIndex = idx;
+      const start = Math.min(lastColorIndex, idx);
+      const end = Math.max(lastColorIndex, idx);
+
+      console.log(`Range selecting (Ctrl+Left): ${start} -> ${end}`);
+
+      const allOptions = colorGrid.querySelectorAll(".color-option");
+      allOptions.forEach((opt) => {
+        const optionIdx = parseInt(opt.dataset.colorIndex);
+        if (optionIdx >= start && optionIdx <= end) {
+          const cb = opt.querySelector(".color-checkbox");
+          if (cb) cb.checked = true;
+        }
+      });
+    };
+
+    colorDiv.onclick = (e) => {
+      if (e.ctrlKey) {
+        handleRangeSelection(index);
+      } else {
+        selectColor(colorFolder, index);
+      }
+    };
 
     if (colorFolder !== "default") {
       const checkbox = document.createElement("input");
@@ -873,7 +898,14 @@ async function loadColors(part) {
       checkbox.className = "color-checkbox";
       checkbox.name = "color-to-delete";
       checkbox.value = colorFolder;
-      checkbox.onclick = (e) => e.stopPropagation();
+      checkbox.onclick = (e) => {
+        e.stopPropagation(); // Vẫn chặn để không kích hoạt selectColor của màu
+        if (e.ctrlKey) {
+          handleRangeSelection(index);
+        } else {
+          lastColorIndex = index; // Cập nhật mốc khi tích checkbox bình thường
+        }
+      };
       checkbox.title = "Chọn để xóa (D)";
       colorDiv.appendChild(checkbox);
     }
@@ -902,6 +934,8 @@ async function loadColors(part) {
 
     colorGrid.appendChild(colorDiv);
   });
+
+  // (Đã chuyển sang Ctrl + Chuột trái ở trên)
 
   // Show/Hide Delete Button
   document.getElementById("delete-colors-btn").style.display =
@@ -975,6 +1009,7 @@ function selectItem(itemNumber) {
 function selectColor(colorFolder, colorIndex) {
   currentColor = colorFolder;
   currentColorIndex = colorIndex !== undefined ? colorIndex : 0;
+  lastColorIndex = currentColorIndex; // Cập nhật mốc chọn màu
 
   document.querySelectorAll(".color-option").forEach((color) => {
     color.classList.remove("active");
