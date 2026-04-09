@@ -839,11 +839,12 @@ async function loadColors(part) {
   const colorCount = part.colors.length > 0 ? part.colors.length : 1; // 1 if only default
 
   controlsDiv.innerHTML = `
-                <span style="font-weight:bold;">Màu sắc (${colorCount})</span>
+                <span style="font-weight:bold;">Màu sắc (${colorCount}) <span id="selected-color-count" style="font-weight:normal; font-size: 11px; color: #666; margin-left: 5px;"></span></span>
                 <div style="display: flex; gap: 5px;">
                     <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
                     <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
+                    <button id="delete-unselected-colors-btn" onclick="confirmDeleteUnselectedColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #f39c12; color: white; border: none; border-radius: 4px;">Xóa màu không chọn</button>
                     <button id="delete-colors-btn" onclick="confirmDeleteColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 4px;">Xóa màu đã chọn (F)</button>
                 </div>
             `;
@@ -882,6 +883,7 @@ async function loadColors(part) {
           if (cb) cb.checked = true;
         }
       });
+      updateSelectedColorCount();
     };
 
     colorDiv.onclick = (e) => {
@@ -905,6 +907,7 @@ async function loadColors(part) {
         } else {
           lastColorIndex = index; // Cập nhật mốc khi tích checkbox bình thường
         }
+        updateSelectedColorCount();
       };
       checkbox.title = "Chọn để xóa (D)";
       colorDiv.appendChild(checkbox);
@@ -948,6 +951,9 @@ async function loadColors(part) {
   } else if (colors.length > 0) {
     selectColor(colors[0], 0);
   }
+
+  // Initial count update
+  updateSelectedColorCount();
 }
 
 // Select item
@@ -1228,6 +1234,34 @@ async function confirmDeleteColors() {
     return;
   }
 
+  await performDeleteColors(colorsToDelete);
+}
+
+// Xóa màu KHÔNG chọn
+async function confirmDeleteUnselectedColors() {
+  const allCheckboxes = document.querySelectorAll(".color-checkbox");
+  const unselectedColors = Array.from(allCheckboxes)
+    .filter((cb) => !cb.checked)
+    .map((cb) => cb.value);
+
+  if (unselectedColors.length === 0) {
+    alert("Tất cả các màu đã được chọn, không có gì để xóa!");
+    return;
+  }
+
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn xóa ${unselectedColors.length} folder màu sắc KHÔNG được chọn? Thao tác này không thể hoàn tác.`,
+    )
+  ) {
+    return;
+  }
+
+  await performDeleteColors(unselectedColors);
+}
+
+// Core deletion logic
+async function performDeleteColors(colorsToDelete) {
   showLoading(true, "Đang xóa các folder màu sắc...");
 
   try {
@@ -1256,7 +1290,6 @@ async function confirmDeleteColors() {
 
       loadColors(currentPart.part);
       renderCharacter();
-      // alert("Đã xóa màu thành công!");
     } else {
       alert("Lỗi: " + result.message);
     }
@@ -1264,6 +1297,19 @@ async function confirmDeleteColors() {
     alert("Lỗi kết nối: " + e);
   } finally {
     hideLoading();
+  }
+}
+
+// Cập nhật số lượng màu đã chọn
+function updateSelectedColorCount() {
+  const countSpan = document.getElementById("selected-color-count");
+  if (!countSpan) return;
+
+  const selectedCount = document.querySelectorAll(".color-checkbox:checked").length;
+  if (selectedCount > 0) {
+    countSpan.textContent = `- Đã chọn: ${selectedCount}`;
+  } else {
+    countSpan.textContent = "";
   }
 }
 
