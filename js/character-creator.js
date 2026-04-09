@@ -842,6 +842,7 @@ async function loadColors(part) {
                 <span style="font-weight:bold;">Màu sắc (${colorCount}) <span id="selected-color-count" style="font-weight:normal; font-size: 11px; color: #666; margin-left: 5px;"></span></span>
                 <div style="display: flex; gap: 5px;">
                     <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu</button>
+                    <button id="fix-colors-by-point-btn" onclick="openColorPickerModal()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 4px;" title="Chọn 1 điểm trên ảnh để tự động sửa mã màu cho TOÀN BỘ folder màu khác">Fix theo điểm</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
                     <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
                     <button id="delete-unselected-colors-btn" onclick="confirmDeleteUnselectedColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #f39c12; color: white; border: none; border-radius: 4px;">Xóa màu không chọn</button>
@@ -944,6 +945,9 @@ async function loadColors(part) {
   document.getElementById("delete-colors-btn").style.display =
     part.colors.length > 0 ? "block" : "none";
 
+  // Initial count update
+  updateSelectedColorCount();
+
   // Restore previously selected color or default to first
   const savedLayer = currentPart ? characterLayers[currentPart.index] : null;
   if (savedLayer && savedLayer.color && colors.includes(savedLayer.color)) {
@@ -951,9 +955,136 @@ async function loadColors(part) {
   } else if (colors.length > 0) {
     selectColor(colors[0], 0);
   }
+}
 
-  // Initial count update
-  updateSelectedColorCount();
+// Logic chọn điểm lấy màu
+let selectedPointCoords = null;
+let selectedColorPickerFilename = "1.png";
+
+function openColorPickerModal() {
+  if (!currentPart) return;
+  
+  const modal = document.getElementById("color-picker-modal");
+  const img = document.getElementById("color-picker-img");
+  const marker = document.getElementById("color-picker-marker");
+  const info = document.getElementById("color-picker-info");
+  const confirmBtn = document.getElementById("confirm-fix-by-point-btn");
+  
+  modal.style.display = "flex";
+  marker.style.display = "none";
+  confirmBtn.disabled = true;
+  info.textContent = "Đang tải ảnh...";
+  selectedPointCoords = null;
+  
+  // Xác định tên tệp ảnh dựa trên Item đang chọn
+  selectedColorPickerFilename = (currentItem && currentItem > 0) ? `${currentItem}.png` : "1.png";
+  
+  // Lấy ảnh mẫu
+  const colorFolder = currentColor || "default";
+  let sampleImagePath = "";
+  
+  if (colorFolder === "default") {
+    sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${selectedColorPickerFilename}`;
+  } else {
+    sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${colorFolder}/${selectedColorPickerFilename}`;
+  }
+  
+  img.src = `${sampleImagePath}?v=${imgVers}`;
+  
+  img.onload = () => {
+    info.textContent = `Vui lòng click vào một điểm trên ảnh ${selectedColorPickerFilename} (${img.naturalWidth}x${img.naturalHeight}px).`;
+    img.onclick = (e) => handleColorPickerClick(e, img);
+  };
+  
+  img.onerror = () => {
+    if (selectedColorPickerFilename !== "1.png") {
+        console.log(`Không tìm thấy ${selectedColorPickerFilename}, thử lại với 1.png`);
+        selectedColorPickerFilename = "1.png";
+        if (colorFolder === "default") {
+          sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/1.png`;
+        } else {
+          sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${colorFolder}/1.png`;
+        }
+        img.src = `${sampleImagePath}?v=${imgVers}`;
+        return;
+    }
+    info.textContent = `Không tìm thấy tệp ảnh làm mẫu (${selectedColorPickerFilename}).`;
+    img.src = "img/placeholder.png";
+  };
+}
+
+function handleColorPickerClick(e, imgEl) {
+  const rect = imgEl.getBoundingClientRect();
+  const offsetX = e.clientX - rect.left;
+  const offsetY = e.clientY - rect.top;
+  
+  // Calculate original coordinates
+  const scaleX = imgEl.naturalWidth / rect.width;
+  const scaleY = imgEl.naturalHeight / rect.height;
+  
+  const originalX = Math.round(offsetX * scaleX);
+  const originalY = Math.round(offsetY * scaleY);
+  
+  selectedPointCoords = { x: originalX, y: originalY };
+  
+  // UI Update
+  const marker = document.getElementById("color-picker-marker");
+  marker.style.left = `${offsetX}px`;
+  marker.style.top = `${offsetY}px`;
+  marker.style.display = "block";
+  
+  const confirmBtn = document.getElementById("confirm-fix-by-point-btn");
+  confirmBtn.disabled = false;
+  
+  const info = document.getElementById("color-picker-info");
+  info.textContent = `Đã chọn tọa độ: X=${originalX}, Y=${originalY} | File: ${selectedColorPickerFilename}`;
+}
+
+function closeColorPickerModal() {
+  document.getElementById("color-picker-modal").style.display = "none";
+}
+
+async function confirmFixColorsByPoint() {
+  if (!currentPart || !selectedPointCoords) return;
+  
+  if (!confirm(`Bạn có chắc chắn muốn lấy mã màu tại điểm (${selectedPointCoords.x}, ${selectedPointCoords.y}) của tệp "1.png" để sửa tên cho TOÀN BỘ folder màu trong bộ phận "${currentPart.part.folder}"?`)) {
+    return;
+  }
+  
+  closeColorPickerModal();
+  showGlobalLoading("Đang xử lý đổi tên theo điểm chọn...");
+  
+  try {
+    const response = await fetch("/api/fix_colors_by_point", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        part_folder: currentPart.part.folder,
+        x: selectedPointCoords.x,
+        y: selectedPointCoords.y,
+        filename: selectedColorPickerFilename
+      })
+    });
+    
+    const result = await response.json();
+    if (result.success) {
+      // Reload structure to see changes
+      await switchKit(CURRENT_KIT_FOLDER);
+      
+      let msg = `Thành công! Đã đổi tên ${result.processed_count} thư mục màu.`;
+      if (result.errors && result.errors.length > 0) {
+        msg += `\nLưu ý các lỗi: \n- ${result.errors.join("\n- ")}`;
+      }
+      alert(msg);
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (e) {
+    alert("Lỗi kết nối server: " + e);
+  } finally {
+    hideGlobalLoading();
+  }
 }
 
 // Select item
@@ -2618,6 +2749,20 @@ function toggleCropBackground() {
   const wrapper = document.getElementById("crop-canvas-wrapper");
   if (wrapper) {
     wrapper.classList.toggle("white-bg");
+  }
+}
+
+function toggleDebugGridTheme() {
+  const grid = document.getElementById("file-debug-grid");
+  if (grid) {
+    grid.classList.toggle("debug-grid-light");
+  }
+}
+
+function toggleColorPickerBackground() {
+  const wrapper = document.getElementById("color-picker-wrapper");
+  if (wrapper) {
+    wrapper.classList.toggle("color-picker-dark");
   }
 }
 

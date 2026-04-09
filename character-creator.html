@@ -149,7 +149,7 @@
         </div>
       </div>
     </div>
-    
+
     <div style="text-align: center; padding: 10px; font-size: 12px; color: #666;">
       Copyright © 2026 Trâm CMC. All rights reserved.
     </div>
@@ -342,12 +342,54 @@
       </div>
     </div>
   </div>
+
+  <!-- Color Picker Point Modal -->
+  <div id="color-picker-modal" class="modal-overlay">
+    <div class="merge-modal modal-custom-large">
+      <div class="merge-header">
+        <h2>🎯 Chọn điểm để lấy mã màu đồng loạt</h2>
+        <button class="btn btn-secondary" onclick="closeColorPickerModal()">✖</button>
+      </div>
+      <div class="crop-modal-body">
+        <div class="crop-modal-hint">
+          🖱️ Click chuột vào một điểm trên ảnh để lấy màu. Tọa độ này sẽ được áp dụng cho toàn bộ thư mục màu khác
+          trong bộ phận này.
+        </div>
+        <div class="crop-modal-layout" style="justify-content: center;">
+          <div id="color-picker-wrapper" class="crop-canvas-wrapper"
+            style="cursor: crosshair; position: relative; max-width: 800px; max-height: 600px; overflow: auto; background: repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 20px 20px;">
+            <div class="pos-absolute t-10 r-10 z-10">
+              <button class="btn btn-secondary" onclick="toggleColorPickerBackground()" title="Đổi màu nền (Trắng/Đen)">
+                🌗
+              </button>
+            </div>
+            <img id="color-picker-img" style="display: block; max-width: 100%; height: auto;">
+            <div id="color-picker-marker"
+              style="display: none; position: absolute; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; background: red; box-shadow: 0 0 5px black; pointer-events: none; transform: translate(-50%, -50%); z-index: 100;">
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="merge-footer justify-end flex-gap-10">
+        <div style="flex: 1; font-size: 13px; color: #666;" id="color-picker-info">
+          Tọa độ: - , - | Màu: -
+        </div>
+        <button class="btn btn-secondary" onclick="closeColorPickerModal()">Hủy</button>
+        <button id="confirm-fix-by-point-btn" class="btn btn-green" onclick="confirmFixColorsByPoint()" disabled>
+          🚀 Bắt đầu Fix tất cả màu
+        </button>
+      </div>
+    </div>
+  </div>
   <!-- Script for Background Toggle -->
 
   <!-- File Debug Modal -->
   <div id="file-debug-modal" class="modal-overlay debug-modal-position">
     <div class="modal-content modal-custom-large">
-      <div class="flex-justify-end m-b-20">
+      <div class="flex-justify-end m-b-20 flex-gap-10">
+        <!-- <button class="btn btn-secondary" onclick="toggleDebugGridTheme()" title="Đổi màu nền (Trắng/Đen)">
+          🌗
+        </button> -->
         <button class="btn btn-dark" onclick="document.getElementById('file-debug-modal').style.display = 'none'">
           Đóng
         </button>

@@ -191,6 +191,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/reorder_parts': self.handle_reorder_parts,
             '/api/fix_color_code': self.handle_fix_color_code,
             '/api/fix_all_part_colors': self.handle_fix_all_part_colors,
+            '/api/fix_colors_by_point': self.handle_fix_colors_by_point,
         }
 
 
@@ -1613,6 +1614,104 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self.send_api_response(False, f"Fix all colors error: {str(e)}")
+
+    def handle_fix_colors_by_point(self, data):
+        kit_folder = data.get('kit')
+        part_folder = data.get('part_folder')
+        x = data.get('x')
+        y = data.get('y')
+        filename = data.get('filename', '1.png')
+
+        if not kit_folder or not part_folder or x is None or y is None:
+            self.send_api_response(False, "Missing parameters")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, part_folder)
+
+            if not os.path.exists(part_path):
+                self.send_api_response(False, "Part folder not found")
+                return
+
+            changes = []
+            errors = []
+            
+            subfolders = [f for f in os.listdir(part_path) if os.path.isdir(os.path.join(part_path, f))]
+            skip_folders = ["items_merged", "cache_blobs"]
+            subfolders.sort()
+
+            for color_folder in subfolders:
+                if color_folder in skip_folders or color_folder == "default":
+                    continue
+                
+                target_dir = os.path.join(part_path, color_folder)
+                img_path = os.path.join(target_dir, filename)
+                
+                # Check for same name with different extension if primary not found
+                if not os.path.exists(img_path):
+                    base_fn, _ = os.path.splitext(filename)
+                    for ext in ['.png', '.webp', '.jpg']:
+                        alt_path = os.path.join(target_dir, f"{base_fn}{ext}")
+                        if os.path.exists(alt_path):
+                            img_path = alt_path
+                            break
+                
+                if not os.path.exists(img_path):
+                    errors.append(f"{color_folder}: File {filename} not found")
+                    continue
+
+                try:
+                    with Image.open(img_path) as img:
+                        img = img.convert("RGBA")
+                        width, height = img.size
+                        
+                        # Ensure coordinates are within bounds
+                        if x < 0 or x >= width or y < 0 or y >= height:
+                            errors.append(f"{color_folder}: Coordinates ({x}, {y}) out of bounds for size {width}x{height}")
+                            continue
+                            
+                        pixel = img.getpixel((int(x), int(y)))
+                        if pixel[3] < 5: # Transparent
+                            errors.append(f"{color_folder}: Pixel at ({x}, {y}) is transparent")
+                            continue
+                            
+                        # Format as Hex
+                        detected_hex = '{:02x}{:02x}{:02x}'.format(pixel[0], pixel[1], pixel[2]).upper()
+                        
+                        if detected_hex == color_folder.split('_')[0].upper():
+                            continue 
+                        
+                        new_name = detected_hex
+                        
+                        # Collision handling
+                        temp_name = new_name
+                        counter = 2
+                        while os.path.exists(os.path.join(part_path, temp_name)):
+                            if temp_name.upper() == color_folder.upper():
+                                break
+                            temp_name = f"{new_name}_{counter}"
+                            counter += 1
+                        
+                        new_name = temp_name
+                        
+                        if new_name.upper() == color_folder.upper():
+                            continue
+
+                        shutil.move(target_dir, os.path.join(part_path, new_name))
+                        changes.append({"old": color_folder, "new": new_name})
+                except Exception as e:
+                    errors.append(f"{color_folder}: {str(e)}")
+
+            self.send_api_response(True, f"Đã xử lý xong toàn bộ màu theo điểm ({x}, {y}).", {
+                "changes": changes,
+                "errors": errors,
+                "processed_count": len(changes)
+            })
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Fix colors by point error: {str(e)}")
 
     def get_dominant_color(self, image_path):
         """Analyzes an image to find the most representative (fill) color by ignoring outlines/highlights."""
