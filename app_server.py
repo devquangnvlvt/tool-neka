@@ -23,18 +23,17 @@ PORT = 8000
 
 # ================= SECURITY UTILITIES =================
 def safe_join(base, *paths):
-    """
-    Safely joins paths and ensures the result is within the base directory.
-    Prevents Path Traversal attacks.
-    """
-    base = os.path.abspath(base)
-    # Filter out empty or None paths
-    clean_paths = [p for p in paths if p and isinstance(p, str)]
-    if not clean_paths:
-        return base
+    """Safely joins paths and ensures the result is within the base directory."""
+    # Convert all to forward slashes for uniform processing
+    clean_paths = [str(p).replace('\\', '/').lstrip('/') for p in paths]
     joined = os.path.abspath(os.path.join(base, *clean_paths))
-    if not joined.startswith(base):
-        raise ValueError("Security violation: Path traversal detected")
+    base_abs = os.path.abspath(base)
+    
+    # Ensure base ends with a separator for startswith check
+    prefix = base_abs if base_abs.endswith(os.sep) else base_abs + os.sep
+    
+    if not (joined + os.sep).startswith(prefix):
+        raise ValueError(f"Security violation: Path traversal detected ({joined} vs {prefix})")
     return joined
 
 def sanitize_error(message):
@@ -47,7 +46,7 @@ def sanitize_error(message):
 def validate_id(id_str):
     """Validates that a kit or folder name is safe."""
     if not id_str: return False
-    return bool(re.match(r"^[a-zA-Z0-9_\-\.]+$", str(id_str)))
+    return bool(re.match(r"^[a-zA-Z0-9_\-\.\/]+$", str(id_str)))
 
 def get_local_ip():
     """Gets the local IP address of the machine."""
@@ -212,28 +211,60 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_get_kits_list(self, data):
         try:
-            base_dir = DATA_DIR
+            folder_json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'folder.json')
+            parent_folders = []
+            if os.path.exists(folder_json_path):
+                try:
+                    with open(folder_json_path, 'r', encoding='utf-8') as f:
+                        parent_folders = json.load(f)
+                except:
+                    parent_folders = []
+
             kits = []
-            if os.path.exists(base_dir):
-
-                for entry in os.listdir(base_dir):
-                    full_path = os.path.join(base_dir, entry)
+            if parent_folders:
+                for parent in parent_folders:
+                    parent_path = safe_join(DATA_DIR, parent)
+                    if os.path.exists(parent_path) and os.path.isdir(parent_path):
+                        for entry in os.listdir(parent_path):
+                            full_path = os.path.join(parent_path, entry)
+                            if os.path.isdir(full_path):
+                                if entry == "cache_blobs": continue
+                                match = re.search(r"(\d+)$", entry)
+                                kit_id = match.group(1) if match else entry
+                                kits.append({
+                                    "id": kit_id,
+                                    "name": entry,
+                                    "folder": f"{parent}/{entry}",
+                                    "parent": parent
+                                })
+            
+            # Always scan for loose kits directly in DATA_DIR ignoring parent folders
+            if os.path.exists(DATA_DIR):
+                for entry in os.listdir(DATA_DIR):
+                    if parent_folders and entry in parent_folders:
+                        continue # Skip parent directories (thuong, tram, etc.)
+                        
+                    full_path = os.path.join(DATA_DIR, entry)
                     if os.path.isdir(full_path):
-                        if entry == "cache_blobs" or not os.path.isdir(full_path):
-
-                            continue
+                        if entry == "cache_blobs": continue
                         match = re.search(r"(\d+)$", entry)
                         kit_id = match.group(1) if match else entry
                         kits.append({
                             "id": kit_id,
                             "name": entry,
-                            "folder": entry
+                            "folder": entry,
+                            "parent": "Mặc định (Ngoài)"
                         })
+
             kits.sort(key=lambda x: x['name'])
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
             self.end_headers()
-            response = json.dumps({"success": True, "kits": kits})
+            response = json.dumps({
+                "success": True, 
+                "kits": kits, 
+                "parents": parent_folders
+            })
             self.wfile.write(response.encode('utf-8'))
         except Exception as e:
             self.send_api_response(False, f"Server Error: {str(e)}")
@@ -241,18 +272,18 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_get_kit_structure(self, data):
         kit_folder = data.get('kit')
+        print(f"DEBUG: Processing kit_structure for: {kit_folder}")
         if not kit_folder:
             self.send_api_response(False, "Missing kit parameter")
             return
         try:
-            base_path = os.path.dirname(os.path.abspath(__file__))
             kit_path = safe_join(DATA_DIR, kit_folder)
+            print(f"DEBUG: Kit path: {kit_path}")
 
-            structured_dir = safe_join(kit_path, "")
             if not os.path.exists(kit_path):
-
-                self.send_api_response(False, "Kit structure not found")
+                self.send_api_response(False, f"Kit structure not found at {kit_folder}")
                 return
+            
             separated_folders = []
             sep_layers_path = os.path.join(kit_path, "separated_layers.json")
             if os.path.exists(sep_layers_path):
@@ -260,7 +291,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     with open(sep_layers_path, 'r', encoding='utf-8') as f:
                         separated_folders = json.load(f)
                 except: pass
-            # Load metadata ONCE at the beginning
+
             meta_data = {}
             meta_path = os.path.join(kit_path, "metadata.json")
             if os.path.exists(meta_path):
@@ -271,10 +302,11 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     print(f"Error loading metadata: {e}")
 
             parts = []
-            for entry in os.listdir(structured_dir):
-                entry_path = os.path.join(structured_dir, entry)
+            for entry in os.listdir(kit_path):
+                entry_path = os.path.join(kit_path, entry)
                 if not os.path.isdir(entry_path): continue
                 
+                # print(f"DEBUG: Found folder entry: {entry}")
                 match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", entry)
                 if not match:
                     x, y = 9999, len(parts) + 1
@@ -378,7 +410,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     duplicate_warnings.append(f"X={x}: {', '.join(folders)}")
 
             parts.sort(key=lambda p: p['y'])
-            
+            print(f"DEBUG: Found {len(parts)} parts for {kit_folder}", flush=True)
+
             # --- Get Global Canvas Dimensions ---
             canvas_width, canvas_height = 1436, 1902 # Defaults
             try:

@@ -37,9 +37,14 @@
           <input type="text" id="kit-search" placeholder="Tìm bộ sưu tập..." class="kit-search-input"
             oninput="filterKits(this.value)">
         </div>
-        <select id="kit-selector" onchange="switchKit(this.value)">
-          <option value="">Đang tải danh sách...</option>
-        </select>
+        <div class="flex-gap-5">
+           <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;">
+             <option value="all">-- Tất cả mục --</option>
+           </select>
+           <select id="kit-selector" onchange="switchKit(this.value)" style="flex: 2;">
+             <option value="">Đang tải danh sách...</option>
+           </select>
+        </div>
       </div>
     </div>
 

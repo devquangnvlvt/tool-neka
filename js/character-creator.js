@@ -18,6 +18,8 @@ let partSortType = "y"; // 'x' or 'y'
 let currentZFilter = "all"; // 'all', '1', '2'
 
 let restoredActivePartFolder = null;
+let allKits = [];
+let currentParentFilter = "all";
 
 // ---- LocalStorage Persistence ----
 function saveSelectionState() {
@@ -96,13 +98,30 @@ async function loadKitsList() {
     const result = await response.json();
 
     if (result.success) {
-      kits = result.kits;
+      allKits = result.kits;
+      kits = allKits;
+
+      if (result.parents) {
+        renderParentSelector(result.parents);
+      }
+
+      // Restore parent filter if saved
+      const savedParent = localStorage.getItem("selectedParent") || "all";
+      const parentSelector = document.getElementById("parent-selector");
+      if (parentSelector) parentSelector.value = savedParent;
+      currentParentFilter = savedParent;
+      
+      if (savedParent !== "all") {
+        kits = allKits.filter(k => k.parent === savedParent);
+      } else {
+        kits = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
+      }
 
       if (kits.length > 0) {
         // Check localStorage for saved kit
-        const savedKit = localStorage.getItem("selectedKit");
-        const kitToSelect =
-          savedKit && kits.find((k) => k.folder === savedKit)
+        let savedKit = localStorage.getItem("selectedKit");
+        // Ensure saved kit actually exists within the currently filtered parent
+        let kitToSelect = savedKit && kits.find((k) => k.folder === savedKit)
             ? kits.find((k) => k.folder === savedKit)
             : kits[0];
 
@@ -118,6 +137,69 @@ async function loadKitsList() {
     }
   } catch (error) {
     console.error("Error loading kits list:", error);
+  }
+}
+
+// Render Parent/Category Selector
+function renderParentSelector(parents) {
+  const selector = document.getElementById("parent-selector");
+  if (!selector) return;
+  
+  selector.innerHTML = '<option value="all">-- Mặc định (Thư mục ngoài) --</option>';
+  parents.forEach(p => {
+    const opt = document.createElement("option");
+    opt.value = p;
+    opt.textContent = p;
+    selector.appendChild(opt);
+  });
+}
+
+// Filter Kits by Category
+function filterByCategory(parentName) {
+  currentParentFilter = parentName;
+  localStorage.setItem("selectedParent", parentName);
+  const searchTerm = document.getElementById("kit-search").value.toLowerCase().trim();
+  
+  let filtered = allKits;
+  if (parentName !== "all") {
+    filtered = allKits.filter(k => k.parent === parentName);
+  } else {
+    // When "all" is selected, only show loose folders that are directly in DATA_DIR
+    filtered = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
+  }
+  
+  if (searchTerm) {
+    filtered = filtered.filter(kit => 
+      kit.name.toLowerCase().includes(searchTerm) || 
+      kit.folder.toLowerCase().includes(searchTerm)
+    );
+  }
+
+  kits = filtered;
+  renderKitsSelector(filtered);
+
+  // Auto-select the first kit when a category is chosen
+  if (filtered.length > 0) {
+      const kitSelector = document.getElementById("kit-selector");
+      if (kitSelector) {
+          kitSelector.value = filtered[0].folder;
+          switchKit(filtered[0].folder);
+      }
+  } else {
+      // Clear current UI if no kits are found in this category
+      const navContainer = document.getElementById("nav-icons");
+      const countLayer = document.getElementById("count-layer");
+      const warningBox = document.getElementById("warning-box");
+      
+      if (navContainer) navContainer.innerHTML = "";
+      if (countLayer) countLayer.innerHTML = "";
+      if (warningBox) {
+          warningBox.style.display = "block";
+          warningBox.innerHTML = '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
+                                 '<strong>⚠️ Thông báo:</strong> Không có bộ sưu tập nào trong thư mục này.</div>';
+      }
+      kitStructure = [];
+      renderCharacter(); // Clear canvas
   }
 }
 
@@ -193,22 +275,31 @@ function renderKitsSelector(kitsToRender) {
 // Filter Kits
 function filterKits(query) {
   const searchTerm = query.toLowerCase().trim();
-  if (!searchTerm) {
-    renderKitsSelector(kits);
-    return;
+  
+  let filtered = allKits;
+  if (currentParentFilter !== "all") {
+    filtered = allKits.filter(k => k.parent === currentParentFilter);
+  } else {
+    filtered = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
   }
 
-  const filtered = kits.filter(kit => 
-    kit.name.toLowerCase().includes(searchTerm) || 
-    kit.folder.toLowerCase().includes(searchTerm)
-  );
+  if (searchTerm) {
+    filtered = filtered.filter(kit => 
+      kit.name.toLowerCase().includes(searchTerm) || 
+      kit.folder.toLowerCase().includes(searchTerm)
+    );
+  }
 
+  kits = filtered;
   renderKitsSelector(filtered);
 }
 
+let isLoadingKit = false;
+
 // Switch Kit
 function switchKit(folderName) {
-  if (!folderName) return;
+  if (!folderName || isLoadingKit) return;
+  isLoadingKit = true;
 
   CURRENT_KIT_FOLDER = folderName;
   KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
@@ -230,7 +321,9 @@ function switchKit(folderName) {
   resetCharacter();
 
   // Reload kit structure for new kit
-  loadKitStructure();
+  loadKitStructure().finally(() => {
+    isLoadingKit = false;
+  });
 }
 
 // Load kit structure from folder API
@@ -369,7 +462,23 @@ async function loadKitStructure(preserveSelection = false) {
 // Initialize app
 function initializeApp(preserveSelection = false) {
   if (!kitStructure || kitStructure.length === 0) {
-    console.error("No kit structure loaded");
+    console.error("No kit structure loaded. The selected kit folder might be empty or in an incorrect format.");
+    // Show a user-friendly message in the warning box
+    const warningBox = document.getElementById("warning-box");
+    if (warningBox) {
+        warningBox.style.display = "block";
+        warningBox.innerHTML = '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
+                               '<strong>⚠️ Thông báo:</strong> Thư mục bộ sưu tập này hiện đang trống hoặc không đúng định dạng (X-Y-Tên-Thư-Mục).</div>';
+    }
+    // Clear navigation headers
+    const navContainer = document.getElementById("nav-icons");
+    const countLayer = document.getElementById("count-layer");
+    if (navContainer) navContainer.innerHTML = "";
+    if (countLayer) countLayer.innerHTML = "";
+    
+    // Clear the canvas and UI layers
+    resetCharacter();
+    renderCharacter();
     return;
   }
 

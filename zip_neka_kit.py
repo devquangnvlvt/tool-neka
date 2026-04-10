@@ -9,7 +9,7 @@ def zip_kit(kit_folder):
     """
     Zips the structured items and metadata of a kit.
     """
-    kit_path = os.path.join(DATA_DIR, kit_folder)
+    target_path = os.path.join(DATA_DIR, kit_folder)
 
     # Smart resolution: if "neka_{id}" exists, use it
     if not os.path.exists(target_path):
