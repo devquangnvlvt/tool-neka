@@ -674,7 +674,9 @@ body {
 .debug-file-grid.debug-grid-light .file-debug-item img {
   background: repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 20px 20px;
 }
-
+.debug-file-grid.debug-grid-light{
+  background: repeating-conic-gradient(#f0f0f0 0% 25%, white 0% 50%) 50% / 20px 20px;
+}
 .file-debug-item span {
   display: block;
   font-size: 12px;

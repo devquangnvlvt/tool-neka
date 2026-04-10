@@ -38,12 +38,12 @@
             oninput="filterKits(this.value)">
         </div>
         <div class="flex-gap-5">
-           <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;">
-             <option value="all">-- Tất cả mục --</option>
-           </select>
-           <select id="kit-selector" onchange="switchKit(this.value)" style="flex: 2;">
-             <option value="">Đang tải danh sách...</option>
-           </select>
+          <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;">
+            <option value="all">-- Tất cả mục --</option>
+          </select>
+          <select id="kit-selector" onchange="switchKit(this.value)" style="flex: 2;">
+            <option value="">Đang tải danh sách...</option>
+          </select>
         </div>
       </div>
     </div>
@@ -392,9 +392,9 @@
   <div id="file-debug-modal" class="modal-overlay debug-modal-position">
     <div class="modal-content modal-custom-large">
       <div class="flex-justify-end m-b-20 flex-gap-10">
-        <!-- <button class="btn btn-secondary" onclick="toggleDebugGridTheme()" title="Đổi màu nền (Trắng/Đen)">
+        <button class="btn btn-secondary" onclick="toggleDebugGridTheme()" title="Đổi màu nền (Trắng/Đen)">
           🌗
-        </button> -->
+        </button>
         <button class="btn btn-dark" onclick="document.getElementById('file-debug-modal').style.display = 'none'">
           Đóng
         </button>
