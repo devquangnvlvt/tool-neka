@@ -3268,11 +3268,12 @@ window.addEventListener("keydown", (e) => {
 
 function toggleMergeBackground() {
   const canvas = document.getElementById("merge-preview-canvas");
-  const currentBg = canvas.style.background;
-  if (currentBg === "rgb(34, 34, 34)" || currentBg === "#222") {
+  if (canvas.dataset.bg === "dark") {
     canvas.style.background = "";
+    canvas.dataset.bg = "light";
   } else {
     canvas.style.background = "#222";
+    canvas.dataset.bg = "dark";
   }
 }
 
