@@ -2758,6 +2758,7 @@ async function redrawMergePreview() {
       img.onload = () => {
         // Check if this layer has color adjustments
         const adj = layerColorAdjustments[filename];
+        let drawableSource = img;
 
         if (adj && adj.target_color) {
           // Apply color tint using temporary canvas
@@ -2770,12 +2771,7 @@ async function redrawMergePreview() {
           tempCtx.drawImage(img, 0, 0);
 
           // Get image data
-          const imageData = tempCtx.getImageData(
-            0,
-            0,
-            tempCanvas.width,
-            tempCanvas.height,
-          );
+          const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
           const data = imageData.data;
 
           // Parse target color
@@ -2789,7 +2785,6 @@ async function redrawMergePreview() {
             const r = data[i];
             const g = data[i + 1];
             const b = data[i + 2];
-            // const a = data[i + 3]; // Keep alpha unchanged
 
             // Convert to grayscale (luminosity)
             const gray = 0.299 * r + 0.587 * g + 0.114 * b;
@@ -2803,49 +2798,25 @@ async function redrawMergePreview() {
 
           // Put modified image data back
           tempCtx.putImageData(imageData, 0, 0);
-
-          // Use coordinate offsets if available
-          let targetX =
-            file.x !== undefined
-              ? file.x
-              : (mergeCanvas.width - tempCanvas.width) / 2;
-          let targetY =
-            file.y !== undefined
-              ? file.y
-              : (mergeCanvas.height - tempCanvas.height) / 2;
-
-          // SPECIAL FIX: Nếu ảnh đã là Full Canvas, x/y nên là 0
-          if (
-            img.naturalWidth === canvasWidth &&
-            img.naturalHeight === canvasHeight
-          ) {
-            targetX = 0;
-            targetY = 0;
-          }
-
-          mctx.drawImage(tempCanvas, targetX, targetY);
-        } else {
-          // No color adjustment, draw normally
-          let targetX =
-            file.x !== undefined
-              ? file.x
-              : (mergeCanvas.width - img.naturalWidth) / 2;
-          let targetY =
-            file.y !== undefined
-              ? file.y
-              : (mergeCanvas.height - img.naturalHeight) / 2;
-
-          // SPECIAL FIX: Nếu ảnh đã là Full Canvas, x/y nên là 0
-          if (
-            img.naturalWidth === canvasWidth &&
-            img.naturalHeight === canvasHeight
-          ) {
-            targetX = 0;
-            targetY = 0;
-          }
-
-          mctx.drawImage(img, targetX, targetY);
+          drawableSource = tempCanvas;
         }
+
+        // Match main canvas rendering behavior identically
+        let targetX = 0;
+        let targetY = 0;
+        let drawW = mergeCanvas.width;
+        let drawH = mergeCanvas.height;
+        
+        // But allow offsets if the image is legitimately tiny compared to the canvas (e.g. < 50% width)
+        // Since main canvas blindly stretches everything, we ONLY respect offsets if it's clearly a cropped sprite.
+        if (img.naturalWidth < canvasWidth * 0.8 && img.naturalHeight < canvasHeight * 0.8) {
+            targetX = file.x !== undefined ? file.x : (mergeCanvas.width - img.naturalWidth) / 2;
+            targetY = file.y !== undefined ? file.y : (mergeCanvas.height - img.naturalHeight) / 2;
+            drawW = img.naturalWidth;
+            drawH = img.naturalHeight;
+        }
+
+        mctx.drawImage(drawableSource, targetX, targetY, drawW, drawH);
 
         resolve();
       };
