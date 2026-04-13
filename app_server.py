@@ -2243,6 +2243,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         crop_y = int(data.get('y', 0))
         crop_w = int(data.get('width', 44))
         crop_h = int(data.get('height', 44))
+        item_no = data.get('item_no') # Optional: only crop this item if provided
 
         if not kit_folder or not folder_name or not color:
             return self.send_api_response(False, "Missing parameters (kit, folder, color)")
@@ -2258,7 +2259,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             if not os.path.exists(color_path):
                 return self.send_api_response(False, f"Color folder not found: {color}")
 
-            # Find all N.png or N.webp files in the color folder
+            # Find images
             image_pattern = re.compile(r"^(\d+)\.(png|webp)$", re.IGNORECASE)
             processed_count = 0
             
@@ -2266,6 +2267,11 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 match = image_pattern.match(filename)
                 if match:
                     num = match.group(1)
+                    
+                    # If item_no is provided, skip others
+                    if item_no is not None and str(num) != str(item_no):
+                        continue
+                        
                     source_path = os.path.join(color_path, filename)
                     target_path = os.path.join(part_path, f"thumb_{num}.png") # Thumbs are always PNG
 

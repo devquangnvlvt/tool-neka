@@ -890,6 +890,17 @@ async function loadItems(part) {
     img.loading = "lazy";
     itemDiv.appendChild(img);
 
+    // Add Individual Crop Button
+    const cropBtn = document.createElement("div");
+    cropBtn.className = "item-crop-btn";
+    cropBtn.innerHTML = "📐";
+    cropBtn.title = "Cắt thumbnail riêng cho ảnh này";
+    cropBtn.onclick = (e) => {
+      e.stopPropagation();
+      openCropThumbnailModal(itemNum);
+    };
+    itemDiv.appendChild(cropBtn);
+
     // Add layer count badge if > 1
     if (part.item_layer_counts && part.item_layer_counts[itemNum]) {
       const layerCount = part.item_layer_counts[itemNum];
@@ -3549,30 +3560,37 @@ async function createPartNav() {
 // --- Cropping Modal Logic ---
 let cropCanvas, cropCtx, cropImg;
 let isDraggingCrop = false;
+let isResizingCrop = false;
+let startX, startY, startW, startH;
+let currentCropItemNo = null; // New: track single item crop
 let cropX = 100,
   cropY = 100;
 let cropScale = 1;
 
-function openCropThumbnailModal() {
+function openCropThumbnailModal(itemNo = null) {
   if (!currentPart || !currentColor) return;
 
   const folder = currentPart.part.folder;
   const color = currentColor;
+  currentCropItemNo = itemNo;
 
-  document.getElementById("crop-part-name").textContent = folder;
+  const titleSuffix = itemNo ? ` cho ảnh #${itemNo}` : "";
+  document.getElementById("crop-part-name").textContent =
+    folder + (itemNo ? ` [Ảnh #${itemNo}]` : "");
   document.getElementById("crop-color-name").textContent = color;
   document.getElementById("crop-modal-overlay").style.display = "flex";
 
   cropCanvas = document.getElementById("crop-canvas");
   cropCtx = cropCanvas.getContext("2d");
 
-  // Load sample image (1.png). Handle default color path.
+  // Load sample image. If itemNo is set, use it.
+  const displayNum = itemNo || 1;
   cropImg = new Image();
   cropImg.crossOrigin = "anonymous";
   const imagePath =
     color === "default"
-      ? `${KIT_PATH}${folder}/1.png`
-      : `${KIT_PATH}${folder}/${color}/1.png`;
+      ? `${KIT_PATH}${folder}/${displayNum}.png`
+      : `${KIT_PATH}${folder}/${color}/${displayNum}.png`;
   cropImg.src = `${imagePath}?v=${Date.now()}`;
 
   cropImg.onload = () => {
@@ -3598,14 +3616,51 @@ function openCropThumbnailModal() {
     // Setup mouse listeners on the canvas container
     const container = cropCanvas.parentElement;
     container.onmousedown = (e) => {
-      isDraggingCrop = true;
-      handleCropMove(e);
+      const isResizer = e.target.id === "crop-resizer";
+      if (isResizer) {
+        isResizingCrop = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        startW = parseInt(document.getElementById("crop-w").value) || 44;
+        startH = parseInt(document.getElementById("crop-h").value) || 44;
+        e.stopPropagation();
+      } else {
+        isDraggingCrop = true;
+        handleCropMove(e);
+      }
     };
     window.onmousemove = (e) => {
-      if (isDraggingCrop) handleCropMove(e);
+      if (isResizingCrop) {
+        const dx = (e.clientX - startX) / cropScale;
+        const dy = (e.clientY - startY) / cropScale;
+        
+        let newW = Math.round(startW + dx);
+        let newH = Math.round(startH + dy);
+        
+        // Respect min size and bounds
+        newW = Math.max(10, Math.min(newW, cropImg.naturalWidth - cropX));
+        newH = Math.max(10, Math.min(newH, cropImg.naturalHeight - cropY));
+
+        const lock = document.getElementById("crop-lock-ratio").checked;
+        if (lock) {
+          // In 1:1 lock, use the larger of the two deltas to feel natural
+          const side = Math.max(newW, newH);
+          // Re-clamp for square
+          const maxSide = Math.min(cropImg.naturalWidth - cropX, cropImg.naturalHeight - cropY);
+          newW = Math.min(side, maxSide);
+          newH = newW;
+        }
+
+        document.getElementById("crop-w").value = newW;
+        document.getElementById("crop-h").value = newH;
+        updateCropFrameSize();
+      } else if (isDraggingCrop) {
+        handleCropMove(e);
+      }
     };
     window.onmouseup = () => {
       isDraggingCrop = false;
+      isResizingCrop = false;
     };
   };
 }
@@ -3631,12 +3686,26 @@ function updateCropFrameSize() {
   const frame = document.getElementById("crop-frame");
   const wInput = document.getElementById("crop-w");
   const hInput = document.getElementById("crop-h");
+  const lockCheck = document.getElementById("crop-lock-ratio");
 
-  const w = parseInt(wInput.value) || 44;
-  
-  // Link height to width
-  hInput.value = w;
-  const h = w;
+  let w = parseInt(wInput.value) || 44;
+  let h = parseInt(hInput.value) || 44;
+
+  if (lockCheck && lockCheck.checked) {
+    // If called from a manual input change, we might need to sync
+    // This part handles the "height follows width" requirement
+    if (document.activeElement === wInput || isResizingCrop) {
+       h = w;
+       hInput.value = h;
+    } else if (document.activeElement === hInput) {
+       w = h;
+       wInput.value = w;
+    } else {
+       // Fallback for programmatic calls
+       h = w;
+       hInput.value = h;
+    }
+  }
 
   frame.style.width = w * cropScale + "px";
   frame.style.height = h * cropScale + "px";
@@ -3672,9 +3741,13 @@ async function confirmBatchCrop() {
   const w = parseInt(document.getElementById("crop-w").value);
   const h = parseInt(document.getElementById("crop-h").value);
 
+  const scopeMsg = currentCropItemNo
+    ? `cho duy nhất ảnh #${currentCropItemNo}`
+    : `hàng loạt cho tất cả ảnh trong folder màu "${currentColor}"`;
+
   if (
     !confirm(
-      `Bắt đầu cắt hàng loạt với kích thước ${w}x${h} tại tọa độ (${Math.round(
+      `Bắt đầu tạo thumbnail ${scopeMsg} với kích thước ${w}x${h} tại tọa độ (${Math.round(
         cropX,
       )}, ${Math.round(cropY)})?\n\nẢnh gốc sẽ KHÔNG bị thay đổi.`,
     )
@@ -3698,6 +3771,7 @@ async function confirmBatchCrop() {
         y: Math.round(cropY),
         width: w,
         height: h,
+        item_no: currentCropItemNo,
       }),
     });
 

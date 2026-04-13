@@ -306,7 +306,7 @@
               </button>
             </div>
             <canvas id="crop-canvas"></canvas>
-            <div id="crop-frame"></div>
+            <div id="crop-frame"><div id="crop-resizer"></div></div>
           </div>
 
           <!-- Controls Area -->
@@ -318,6 +318,13 @@
             <div class="crop-control-group">
               <label>Cao (px)</label>
               <input type="number" id="crop-h" value="44" min="10" max="2000" oninput="updateCropFrameSize()">
+            </div>
+
+            <div class="crop-control-group">
+              <label class="flex-gap-8 pointer align-center" style="color: #ecf0f1; font-weight: normal; text-transform: none; font-size: 13px;">
+                <input type="checkbox" id="crop-lock-ratio" checked onchange="updateCropFrameSize()">
+                Khóa tỉ lệ 1:1
+              </label>
             </div>
 
             <div class="crop-size-preview">

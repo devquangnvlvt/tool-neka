@@ -797,7 +797,8 @@ body {
   position: absolute;
   border: 2px solid #e74c3c;
   background: rgba(231, 76, 60, 0.15);
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: move;
   box-sizing: border-box;
   box-shadow: 0 0 0 1px rgba(231,76,60,0.4), inset 0 0 0 1px rgba(231,76,60,0.2);
   border-radius: 2px;
@@ -812,6 +813,19 @@ body {
 }
 #crop-frame::before { top: -2px; left: -2px; border-width: 3px 0 0 3px; }
 #crop-frame::after  { bottom: -2px; right: -2px; border-width: 0 3px 3px 0; }
+
+#crop-resizer {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 12px;
+  height: 12px;
+  background-color: #e74c3c;
+  border: 1px solid white;
+  border-radius: 2px;
+  cursor: nwse-resize;
+  z-index: 10;
+}
 
 .crop-controls-panel {
   width: 190px;
@@ -1149,5 +1163,40 @@ body {
 .color-adjust-box {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 8px;
+}
+
+/* Individual Item Crop Button */
+.item-option {
+  position: relative;
+}
+
+.item-crop-btn {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 24px;
+  height: 24px;
+  background-color: rgba(44, 62, 80, 0.85);
+  color: white;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0;
+  transition: all 0.2s ease;
+  z-index: 5;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.item-option:hover .item-crop-btn {
+  opacity: 1;
+}
+
+.item-crop-btn:hover {
+  background-color: #e74c3c;
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
