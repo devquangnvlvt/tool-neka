@@ -38,7 +38,8 @@
             oninput="filterKits(this.value)">
         </div>
         <div class="flex-gap-5">
-          <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;">
+          <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;border: 0.5px solid #e7e4e4;
+    border-radius: 5px;">
             <option value="all">-- Tất cả mục --</option>
           </select>
           <select id="kit-selector" onchange="switchKit(this.value)" style="flex: 2;">
@@ -286,7 +287,7 @@
   <div id="crop-modal-overlay" class="modal-overlay">
     <div class="merge-modal modal-custom-large">
       <div class="merge-header">
-        <h2>Tạo thumbnail  &mdash; <span id="crop-part-name"></span></h2>
+        <h2>Tạo thumbnail &mdash; <span id="crop-part-name"></span></h2>
         <button class="btn btn-secondary" onclick="closeCropModal()">✖</button>
       </div>
 

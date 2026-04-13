@@ -42,32 +42,40 @@ def delete_part(kit_folder, part_y):
         if os.path.exists(structured_dir):
             # Find the X of the part being deleted
             target_x = None
-            target_pattern = re.compile(rf"^(\d+)-{part_y}$")
+            # Robust pattern to capture X, Y, and optional suffix
+            general_pattern = re.compile(r"^(\d+)-(\d+)(?:-(.*))?$")
+            print(f"DEBUG: Searching for folder with Y index: {part_y}")
             
             all_entries = os.listdir(structured_dir)
             for entry in all_entries:
-                match = target_pattern.match(entry)
+                match = general_pattern.match(entry)
                 if match:
-                    target_x = int(match.group(1))
-                    folder_path = os.path.join(structured_dir, entry)
-                    print(f"DEBUG: Removing folder: {entry} (target_x: {target_x})")
-                    if os.path.isdir(folder_path):
-                        # Use handle_remove_readonly to force delete read-only files
-                        shutil.rmtree(folder_path, ignore_errors=False, onerror=handle_remove_readonly)
+                    x_val = int(match.group(1))
+                    y_val = int(match.group(2))
+                    
+                    if y_val == part_y:
+                        target_x = x_val
+                        folder_path = os.path.join(structured_dir, entry)
+                        print(f"DEBUG: MATCH FOUND! folder: {entry} (target_x: {target_x})")
+                        if os.path.isdir(folder_path):
+                            # Use handle_remove_readonly to force delete read-only files
+                            shutil.rmtree(folder_path, ignore_errors=False, onerror=handle_remove_readonly)
             
             if target_x is None:
+                print(f"DEBUG: Failed to find any folder with Y={part_y} in {structured_dir}")
                 return False, f"Could not find folder with Y index {part_y}"
 
             # Re-index ALL remaining folders
             folder_info = []
             for entry in os.listdir(structured_dir):
-                match = re.match(r"^(\d+)-(\d+)$", entry)
+                match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", entry)
                 if match:
                     x = int(match.group(1))
                     y = int(match.group(2))
+                    suffix = match.group(3)
                     # Only add if it needs to change (X > target_x OR Y > target_y)
                     if x > target_x or y > part_y:
-                        folder_info.append({'name': entry, 'x': x, 'y': y})
+                        folder_info.append({'name': entry, 'x': x, 'y': y, 'suffix': suffix})
 
             # Sort by Y ascending to avoid collisions during sequential renaming
             # Although with both X and Y changing, we might need a safer move logic
@@ -76,7 +84,11 @@ def delete_part(kit_folder, part_y):
             for info in folder_info:
                 new_x = info['x'] - 1 if info['x'] > target_x else info['x']
                 new_y = info['y'] - 1 if info['y'] > part_y else info['y']
+                
                 new_name = f"{new_x}-{new_y}"
+                if info['suffix']:
+                    new_name += f"-{info['suffix']}"
+
                 old_path = os.path.join(structured_dir, info['name'])
                 new_path = os.path.join(structured_dir, new_name)
                 
@@ -112,17 +124,22 @@ def delete_part(kit_folder, part_y):
                     
                     new_separated_layers = []
                     for folder_name in separated_layers:
-                        match = re.match(r"^(\d+)-(\d+)$", folder_name)
+                        match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", folder_name)
                         if match:
                             x = int(match.group(1))
                             y = int(match.group(2))
+                            suffix = match.group(3)
                             
                             if y == part_y:
                                 continue
                             
                             new_x = x - 1 if x > target_x else x
                             new_y = y - 1 if y > part_y else y
-                            new_separated_layers.append(f"{new_x}-{new_y}")
+                            
+                            new_name = f"{new_x}-{new_y}"
+                            if suffix:
+                                new_name += f"-{suffix}"
+                            new_separated_layers.append(new_name)
                         else:
                             new_separated_layers.append(folder_name)
                     

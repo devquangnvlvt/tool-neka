@@ -1938,11 +1938,11 @@ async function showFolderFiles() {
           const navContainer = document.createElement("div");
           navContainer.className = "file-debug-group";
           navContainer.style.cssText =
-            "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;";
+            "padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;";
 
           navContainer.innerHTML += `
                                 <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:5px;">
-                                    <div style="font-weight:bold; color:#aaa;">NAV ICON</div>
+                                    <div style="font-weight:bold; opacity: 0.7;">NAV ICON</div>
                                     <button onclick="document.getElementById('nav-file-input').click()" style="padding:2px 8px; font-size:11px; cursor:pointer; background: #3498db; color:white; border:none; border-radius:3px;" title="Upload ảnh mới">⬆️ Upload</button>
                                 </div>
                                 <input type="file" id="nav-file-input" hidden accept="image/*" onchange="uploadNavFile(this)">
@@ -1952,7 +1952,7 @@ async function showFolderFiles() {
             navContainer.innerHTML += `
                                     <div class="file-debug-slot" title="${group.main.name}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:center;">
                                         <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain; background:rgba(255,255,255,0.1); border-radius:4px;">
-                                        <div style="margin-top:5px;color:white">${group.main.name}</div>
+                                        <div style="margin-top:5px;">${group.main.name}</div>
                                         <div style="margin-top:8px; display:flex; justify-content:center; width:100%;">
                                             <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;"> Xóa</button>
                                         </div>
@@ -1981,7 +1981,7 @@ async function showFolderFiles() {
         container.dataset.id = id; // Identify the group
         // Changed flex-direction to row for side-by-side
         container.style.cssText =
-          "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: row; align-items: center; justify-content: space-around; gap: 10px;";
+          "padding: 10px; border-radius: 8px; display: flex; flex-direction: row; align-items: center; justify-content: space-around; gap: 10px;";
 
         // Main Slot
         if (group.main) {
@@ -1990,7 +1990,7 @@ async function showFolderFiles() {
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : ""}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:grab;">
                                     <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain; pointer-events: none;">
-                                    <span style="color:white; font-size:12px;">${group.main.name}</span>
+                                    <span style="font-size:12px;">${group.main.name}</span>
                                 </div>
                              `;
         } else {
@@ -2011,7 +2011,7 @@ async function showFolderFiles() {
                                      draggable="true" ondragstart="handleDragStart(event, '${group.main ? group.main.name : thumbName}')"
                                      style="flex:1; display:flex; flex-direction:column; align-items:center; position:relative;">
                                     <img src="${group.thumb.url}?v=${timestamp}" style="width: 100%; height: 80px; object-fit: contain;">
-                                    <span style="color:white; font-size:12px;">${thumbName}</span>
+                                    <span style="font-size:12px;">${thumbName}</span>
                                     
                                     <!-- Controls -->
                                     <div style="margin-top:5px; display:flex; gap:5px;">
@@ -2060,7 +2060,7 @@ async function showFolderFiles() {
         const itemDiv = document.createElement("div");
         itemDiv.className = "file-debug-item";
         itemDiv.style.cssText =
-          "background: rgba(255,255,255,0.05); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center;";
+          "padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center;";
         itemDiv.innerHTML = `
                             <img src="${file.url}?v=${timestamp}" style="width: 100%; height: 100px; object-fit: contain;">
                             <span>${file.name}</span>

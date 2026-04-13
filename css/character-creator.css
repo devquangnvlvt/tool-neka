@@ -680,8 +680,36 @@ body {
 .file-debug-item span {
   display: block;
   font-size: 12px;
-  color: #ddd;
+  color: #fff;
   word-break: break-all;
+}
+
+/* Base styles for debug elements (previously inline) */
+.file-debug-group, .file-debug-item {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  transition: all 0.2s ease;
+}
+
+.file-debug-group span, .file-debug-group div {
+  color: #fff;
+}
+
+/* Light Mode Theme Overrides */
+.debug-file-grid.debug-grid-light .file-debug-group,
+.debug-file-grid.debug-grid-light .file-debug-item {
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.debug-file-grid.debug-grid-light .file-debug-group span,
+.debug-file-grid.debug-grid-light .file-debug-group div,
+.debug-file-grid.debug-grid-light .file-debug-item span {
+  color: #000 !important;
+}
+
+.debug-file-grid.debug-grid-light .file-debug-slot {
+  border-color: rgba(0,0,0,0.1) !important;
 }
 
 /* ===== CROP MODAL STYLES ===== */
