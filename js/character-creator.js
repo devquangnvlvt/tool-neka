@@ -3800,7 +3800,11 @@ async function commitPartReorder() {
       newY = sequenceOrder;
     }
 
-    const newName = `${newX}-${newY}`;
+    // Capture existing suffix from old name
+    const match = oldName.match(/^(\d+)-(\d+)(?:-(.*))?$/);
+    const suffix = (match && match[3]) ? `-${match[3]}` : "";
+
+    const newName = `${newX}-${newY}${suffix}`;
     
     // We only send renames if the name actually changes
     if (oldName !== newName) {
