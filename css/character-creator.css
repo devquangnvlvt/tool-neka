@@ -1174,8 +1174,8 @@ body {
   position: absolute;
   top: 4px;
   left: 4px;
-  width: 24px;
-  height: 24px;
+  width: 15px;
+  height: 15px;
   background-color: rgba(44, 62, 80, 0.85);
   color: white;
   border-radius: 4px;
@@ -1196,7 +1196,7 @@ body {
 
 .item-crop-btn:hover {
   background-color: #e74c3c;
-  transform: scale(1.1);
+  transform: scale(0.75);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 

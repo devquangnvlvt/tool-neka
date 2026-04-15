@@ -893,7 +893,6 @@ async function loadItems(part) {
     // Add Individual Crop Button
     const cropBtn = document.createElement("div");
     cropBtn.className = "item-crop-btn";
-    cropBtn.innerHTML = "📐";
     cropBtn.title = "Cắt thumbnail riêng cho ảnh này";
     cropBtn.onclick = (e) => {
       e.stopPropagation();
