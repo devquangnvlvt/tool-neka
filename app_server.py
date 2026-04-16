@@ -61,6 +61,11 @@ def get_local_ip():
         s.close()
     return IP
 
+def natural_sort_key(s):
+    """Sorts strings with numbers in natural order (e.g. '2.png' before '10.png')."""
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split(r'(\d+)', str(s))]
+
 # ======================================================
 
 class KitHandler(http.server.SimpleHTTPRequestHandler):
@@ -192,6 +197,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/fix_color_code': self.handle_fix_color_code,
             '/api/fix_all_part_colors': self.handle_fix_all_part_colors,
             '/api/fix_colors_by_point': self.handle_fix_colors_by_point,
+            '/api/reorder_images': self.handle_reorder_images,
         }
 
 
@@ -1149,9 +1155,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                         l_img = apply_color_transform(l_img, target_col, sat, bri)
                                 
                                 x, y = 0, 0
+                                # Only apply offsets if the image is not already full-size
                                 if fn in offsets:
                                     w, h = l_img.size
-                                    if w < ow or h < oh:
+                                    if w < ow and h < oh:
                                         x = offsets[fn]['x']
                                         y = offsets[fn]['y']
                                 img.paste(l_img.convert("RGBA"), (x, y), l_img.convert("RGBA"))
@@ -1283,9 +1290,10 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                     adj = layer_adjustments[fn]
                                     l_img = apply_color_transform(l_img, adj.get('target_color'), adj.get('saturation', 1.0), adj.get('brightness', 1.0))
                                 x, y = 0, 0
+                                # Only apply offsets if the image is not already full-size
                                 if fn in offsets:
                                     w, h = l_img.size
-                                    if w < ow or h < oh:
+                                    if w < ow and h < oh:
                                         x = offsets[fn]['x']; y = offsets[fn]['y']
                                 img.paste(l_img.convert("RGBA"), (x, y), l_img.convert("RGBA"))
                             valid_merge = True
@@ -2166,15 +2174,16 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 
                 results["total_images"] += 1
                 
-                # Check if thumb exists
-                if os.path.exists(thumb_path):
-                    folder_skipped += 1
-                    results["skipped_thumbs"] += 1
-                    continue
-                
                 # Create thumbnail
                 try:
                     with Image.open(source_path) as img:
+                        # Standardize to 1436x1902 to ensure consistent item sizes in thumbnails
+                        # (Matches the main canvas stretching behavior)
+                        std_w, std_h = 1436, 1902
+                        if img.width != std_w or img.height != std_h:
+                            # Use LANCZOS for high-quality down/up scaling
+                            img = img.resize((std_w, std_h), Image.LANCZOS)
+                        
                         img.thumbnail((200, 200))
                         img.save(thumb_path)
                     folder_created += 1
@@ -2280,6 +2289,8 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             # Crop: (left, top, right, bottom)
                             box = (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h)
                             cropped_img = img.crop(box)
+                            # Standardize to 200x200
+                            cropped_img.thumbnail((200, 200))
                             # Save as thumbnail in part folder
                             cropped_img.save(target_path)
                             processed_count += 1
@@ -2546,6 +2557,93 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
         except Exception as e:
             self.send_api_response(False, f"Error during reordering: {str(e)}")
+
+    def handle_reorder_images(self, data):
+        kit_folder = data.get('kit')
+        part_folder = data.get('part_folder')
+
+        if not kit_folder or not part_folder:
+            self.send_api_response(False, "Missing parameters (kit or part_folder)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            part_path = safe_join(kit_path, part_folder)
+            
+            if not os.path.exists(part_path):
+                self.send_api_response(False, f"Part folder not found: {part_folder}")
+                return
+
+            # Determine folders to process
+            target_dirs = []
+            
+            # Find subdirectories (colors)
+            subdirs = [d for d in os.listdir(part_path) if os.path.isdir(os.path.join(part_path, d))]
+            # Filter subdirs (exclude items_merged if it somehow exists here, although unlikely)
+            subdirs = [d for d in subdirs if d != "items_merged"]
+            
+            if subdirs:
+                for sd in subdirs:
+                    target_dirs.append(os.path.join(part_path, sd))
+            else:
+                # No color folders, process the part root itself
+                target_dirs.append(part_path)
+
+            image_extensions = {'.png', '.jpg', '.jpeg', '.webp'}
+            processed_count = 0
+            
+            for folder in target_dirs:
+                # 1. Collect valid image files
+                files = []
+                for f in os.listdir(folder):
+                    if not os.path.isfile(os.path.join(folder, f)):
+                        continue
+                    
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext not in image_extensions:
+                        continue
+                    
+                    # Exclude thumbnails and nav
+                    fname_lower = f.lower()
+                    if fname_lower.startswith('thumb_') or fname_lower.startswith('thumbnail_'):
+                        continue
+                    if fname_lower in ['nav.png', 'nav.webp']:
+                        continue
+                    
+                    files.append(f)
+                
+                if not files:
+                    continue
+                
+                # 2. Natural Sort
+                files.sort(key=natural_sort_key)
+                
+                # 3. Rename to TEMP to avoid collisions
+                temp_map = []
+                for i, old_name in enumerate(files):
+                    ext = os.path.splitext(old_name)[1]
+                    temp_name = f"reorder_tmp_{i}_{os.getpid()}{ext}"
+                    try:
+                        os.rename(os.path.join(folder, old_name), os.path.join(folder, temp_name))
+                        temp_map.append((temp_name, ext))
+                    except Exception as e:
+                        print(f"Error renaming to temp: {e}")
+                
+                # 4. Rename to FINAL (1, 2, 3...)
+                for i, (temp_name, ext) in enumerate(temp_map, 1):
+                    new_name = f"{i}{ext}"
+                    try:
+                        os.rename(os.path.join(folder, temp_name), os.path.join(folder, new_name))
+                    except Exception as e:
+                        print(f"Error renaming to final: {e}")
+                
+                processed_count += 1
+
+            self.send_api_response(True, f"Đã sắp xếp lại ảnh trong {processed_count} thư mục.")
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Lỗi sắp xếp ảnh: {str(e)}")
 
 
 # ======================================================

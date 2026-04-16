@@ -961,6 +961,7 @@ async function loadColors(part) {
                 <span style="font-weight:bold;">Màu sắc (${colorCount}) <span id="selected-color-count" style="font-weight:normal; font-size: 11px; color: #666; margin-left: 5px;"></span></span>
                 <div style="display: flex; gap: 5px;">
                     <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu</button>
+                    <button id="reorder-images-btn" onclick="reorderPartImages()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #34495e; color: white; border: none; border-radius: 4px;" title="Sắp xếp lại tên ảnh từ 1 tới N trong các folder (Bỏ qua Thumb/Nav)">Sắp xếp ảnh</button>
                     <button id="fix-colors-by-point-btn" onclick="openColorPickerModal()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 4px;" title="Chọn 1 điểm trên ảnh để tự động sửa mã màu cho TOÀN BỘ folder màu khác">Fix theo điểm</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
                     <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
@@ -1455,6 +1456,47 @@ async function fixAllPartColorCodes() {
       } else {
         alert("Tất cả mã màu đều đã chính xác!");
       }
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (e) {
+    alert("Lỗi kết nối: " + e);
+  } finally {
+    hideLoading();
+  }
+}
+
+// Reorder images (1 to N) in current part
+async function reorderPartImages() {
+  if (!currentPart) return;
+
+  if (
+    !confirm(
+      `Bạn có chắc muốn sắp xếp lại tên ảnh (từ 1 tới N) cho toàn bộ thư mục trong bộ phận "${currentPart.part.folder}"?\n` +
+      `- Sẽ tự động bỏ qua các ảnh thumbnail và nav.png.\n` +
+      `- Thao tác này sẽ thay đổi tên tệp thực tế trên server.`
+    )
+  ) {
+    return;
+  }
+
+  showLoading(true, `Đang sắp xếp lại ảnh cho "${currentPart.part.folder}"...`);
+
+  try {
+    const response = await fetch("/api/reorder_images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        part_folder: currentPart.part.folder,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      // Reload kit structure to reflect new numbering
+      await loadKitStructure(true); 
+      alert(result.message);
     } else {
       alert("Lỗi: " + result.message);
     }
@@ -2350,11 +2392,33 @@ async function batchDeleteAndReorder() {
     return;
   }
 
-  // Parse input (1, 3, 4 or 1 3 4 or 1;3;4)
-  const indices = value
-    .split(/[\s,;]+/)
-    .map((i) => parseInt(i))
-    .filter((i) => !isNaN(i));
+  // Parse input (1, 3, 5-10 or 1;3;5-10)
+  let indices = [];
+  const cleanedValue = value.replace(/\s*-\s*/g, "-");
+  const segments = cleanedValue.split(/[\s,;]+/);
+  
+  segments.forEach(seg => {
+    if (seg.includes("-")) {
+      const parts = seg.split("-");
+      if (parts.length === 2) {
+        const start = parseInt(parts[0]);
+        const end = parseInt(parts[1]);
+        if (!isNaN(start) && !isNaN(end)) {
+          const low = Math.min(start, end);
+          const high = Math.max(start, end);
+          for (let i = low; i <= high; i++) {
+            indices.push(i);
+          }
+        }
+      }
+    } else {
+      const num = parseInt(seg);
+      if (!isNaN(num)) indices.push(num);
+    }
+  });
+
+  // Deduplicate and sort
+  indices = [...new Set(indices)].sort((a, b) => a - b);
 
   if (indices.length === 0) {
     alert("Danh sách số không hợp lệ.");
@@ -2811,22 +2875,9 @@ async function redrawMergePreview() {
           drawableSource = tempCanvas;
         }
 
-        // Match main canvas rendering behavior identically
-        let targetX = 0;
-        let targetY = 0;
-        let drawW = mergeCanvas.width;
-        let drawH = mergeCanvas.height;
-        
-        // But allow offsets if the image is legitimately tiny compared to the canvas (e.g. < 50% width)
-        // Since main canvas blindly stretches everything, we ONLY respect offsets if it's clearly a cropped sprite.
-        if (img.naturalWidth < canvasWidth * 0.8 && img.naturalHeight < canvasHeight * 0.8) {
-            targetX = file.x !== undefined ? file.x : (mergeCanvas.width - img.naturalWidth) / 2;
-            targetY = file.y !== undefined ? file.y : (mergeCanvas.height - img.naturalHeight) / 2;
-            drawW = img.naturalWidth;
-            drawH = img.naturalHeight;
-        }
-
-        mctx.drawImage(drawableSource, targetX, targetY, drawW, drawH);
+        // Standardize rendering behavior to match the main view (renderCharacter)
+        // This ensures that positioning is identical between the main canvas and the merge modal.
+        mctx.drawImage(drawableSource, 0, 0, mergeCanvas.width, mergeCanvas.height);
 
         resolve();
       };
