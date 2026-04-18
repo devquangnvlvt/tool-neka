@@ -14,7 +14,7 @@
     <div class="header">
       <div style="display: flex; gap: 50px; align-items: center; ">
         <h6><a id="link-picrew" href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h6>
-          <h6><a id="link-neka" href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h6>
+        <h6><a id="link-neka" href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h6>
       </div>
       <div class="kit-selector-area">
         <div class="flex-between m-b-5">
@@ -306,7 +306,9 @@
               </button>
             </div>
             <canvas id="crop-canvas"></canvas>
-            <div id="crop-frame"><div id="crop-resizer"></div></div>
+            <div id="crop-frame">
+              <div id="crop-resizer"></div>
+            </div>
           </div>
 
           <!-- Controls Area -->
@@ -321,7 +323,8 @@
             </div>
 
             <div class="crop-control-group">
-              <label class="flex-gap-8 pointer align-center" style="color: #ecf0f1; font-weight: normal; text-transform: none; font-size: 13px;">
+              <label class="flex-gap-8 pointer align-center"
+                style="color: #ecf0f1; font-weight: normal; text-transform: none; font-size: 13px;">
                 <input type="checkbox" id="crop-lock-ratio" checked onchange="updateCropFrameSize()">
                 Khóa tỉ lệ 1:1
               </label>
@@ -407,8 +410,14 @@
           Đóng
         </button>
       </div>
-      <div class="flex-between m-b-5">
-        <h3 style="color:white">Danh sách file trong folder</h3>
+      <div class="flex-between m-b-5" style="
+      display: flex;
+    position: fixed;
+    /* margin-top: -29px; */
+    right: 63px;
+    top: 77px;
+      ">
+
         <div class="delete-item">
           <div class="flex-wrap m-t-25">
             <input type="text" id="batch-delete-input" placeholder="Nhập số cần xóa, VD: 1, 3, 4"
@@ -449,8 +458,10 @@
       </div>
       <div class="p-20">
         <div class="input-wrapper m-b-20">
-          <label class="font-12 text-muted m-b-5 d-block">Tên hiện tại: <span id="rename-old-name" class="font-bold"></span></label>
-          <input type="text" id="rename-new-input" class="debug-input w-100 p-10 br-8" placeholder="Nhập tên mới..." onkeydown="if(event.key==='Enter') confirmRenameModal(); if(event.key==='Escape') closeRenameModal();">
+          <label class="font-12 text-muted m-b-5 d-block">Tên hiện tại: <span id="rename-old-name"
+              class="font-bold"></span></label>
+          <input type="text" id="rename-new-input" class="debug-input w-100 p-10 br-8" placeholder="Nhập tên mới..."
+            onkeydown="if(event.key==='Enter') confirmRenameModal(); if(event.key==='Escape') closeRenameModal();">
         </div>
         <div class="flex-justify-end flex-gap-10">
           <button class="btn btn-secondary" onclick="closeRenameModal()">Hủy</button>

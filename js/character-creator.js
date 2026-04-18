@@ -5,6 +5,7 @@ let KIT_PATH = ""; // Set dynamically
 
 // State
 let kitStructure = null; // Changed from metadata
+let globallySelectedColors = new Set(); // Chứa các mã màu đã chọn để đồng bộ giữa các bộ phận
 let kits = [];
 let currentPart = null;
 let currentItem = null;
@@ -1004,7 +1005,10 @@ async function loadColors(part) {
         const optionIdx = parseInt(opt.dataset.colorIndex);
         if (optionIdx >= start && optionIdx <= end) {
           const cb = opt.querySelector(".color-checkbox");
-          if (cb) cb.checked = true;
+          if (cb) {
+            cb.checked = true;
+            globallySelectedColors.add(opt.dataset.colorFolder);
+          }
         }
       });
       updateSelectedColorCount();
@@ -1025,12 +1029,18 @@ async function loadColors(part) {
       checkbox.className = "color-checkbox";
       checkbox.name = "color-to-delete";
       checkbox.value = colorFolder;
+      checkbox.checked = globallySelectedColors.has(colorFolder);
       checkbox.onclick = (e) => {
         e.stopPropagation(); // Vẫn chặn để không kích hoạt selectColor của màu
         if (e.ctrlKey) {
           handleRangeSelection(index);
         } else {
           lastColorIndex = index; // Cập nhật mốc khi tích checkbox bình thường
+          if (checkbox.checked) {
+            globallySelectedColors.add(colorFolder);
+          } else {
+            globallySelectedColors.delete(colorFolder);
+          }
         }
         updateSelectedColorCount();
       };
@@ -1646,14 +1656,54 @@ async function performDeleteColors(colorsToDelete) {
 // Cập nhật số lượng màu đã chọn
 function updateSelectedColorCount() {
   const countSpan = document.getElementById("selected-color-count");
+  const clearBtn = document.getElementById("clear-global-colors-btn");
   if (!countSpan) return;
 
-  const selectedCount = document.querySelectorAll(".color-checkbox:checked").length;
-  if (selectedCount > 0) {
-    countSpan.textContent = `- Đã chọn: ${selectedCount}`;
+  // Số lượng mã màu trong bộ phận hiện tại khớp với danh sách chọn toàn cục
+  const localChecked = document.querySelectorAll(".color-checkbox:checked").length;
+  const globalCount = globallySelectedColors.size;
+
+  if (globalCount > 0) {
+    countSpan.textContent = `- Đã chọn: ${localChecked} / ${globalCount} màu`;
+    if (clearBtn) clearBtn.style.display = "block";
   } else {
     countSpan.textContent = "";
+    if (clearBtn) clearBtn.style.display = "none";
   }
+}
+
+// Bỏ chọn tất cả màu đã chọn toàn cục
+function clearGloballySelectedColors() {
+  globallySelectedColors.clear();
+  
+  // Bỏ tích tất cả checkbox đang hiển thị
+  const checkboxes = document.querySelectorAll(".color-checkbox");
+  checkboxes.forEach(cb => cb.checked = false);
+  
+  updateSelectedColorCount();
+}
+
+// Copy danh sách mã màu đang chọn vào Clipboard
+function copySelectedColorCodes() {
+  if (globallySelectedColors.size === 0) {
+    alert("Chưa có màu nào được chọn để copy!");
+    return;
+  }
+  
+  const codes = Array.from(globallySelectedColors).join(", ");
+  navigator.clipboard.writeText(codes).then(() => {
+    alert(`✅ Đã copy ${globallySelectedColors.size} mã màu vào bộ nhớ tạm.`);
+  }).catch(err => {
+    console.error("Lỗi copy:", err);
+    // Fallback nếu clipboard API lỗi
+    const tempInput = document.createElement("input");
+    tempInput.value = codes;
+    document.body.appendChild(tempInput);
+    tempInput.select();
+    document.execCommand("copy");
+    document.body.removeChild(tempInput);
+    alert("✅ Đã copy mã màu (fallback).");
+  });
 }
 
 // Update character
