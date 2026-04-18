@@ -439,6 +439,27 @@
     <div class="spinner"></div>
     <p id="global-loading-message">Đang xử lý...</p>
   </div>
+
+  <!-- Rename Modal -->
+  <div id="rename-modal-overlay" class="modal-overlay">
+    <div class="modal-content modal-custom-small">
+      <div class="merge-header">
+        <h2 id="rename-modal-title">Đổi tên thư mục</h2>
+        <button class="btn btn-secondary" onclick="closeRenameModal()">✖</button>
+      </div>
+      <div class="p-20">
+        <div class="input-wrapper m-b-20">
+          <label class="font-12 text-muted m-b-5 d-block">Tên hiện tại: <span id="rename-old-name" class="font-bold"></span></label>
+          <input type="text" id="rename-new-input" class="debug-input w-100 p-10 br-8" placeholder="Nhập tên mới..." onkeydown="if(event.key==='Enter') confirmRenameModal(); if(event.key==='Escape') closeRenameModal();">
+        </div>
+        <div class="flex-justify-end flex-gap-10">
+          <button class="btn btn-secondary" onclick="closeRenameModal()">Hủy</button>
+          <button class="btn btn-green" onclick="confirmRenameModal()">Xác nhận</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="js/character-creator.js?v=2"></script>
 </body>
 

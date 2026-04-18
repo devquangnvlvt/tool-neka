@@ -583,7 +583,10 @@ function initializeApp(preserveSelection = false) {
       navIcon.style.borderColor = "#ff7675";
     }
 
-    navIcon.onclick = () => selectPart(index, part);
+    navIcon.onclick = () => {
+      setFocusArea("parts");
+      selectPart(index, part);
+    };
 
     navContainer.appendChild(navIcon);
 
@@ -1008,6 +1011,7 @@ async function loadColors(part) {
     };
 
     colorDiv.onclick = (e) => {
+      setFocusArea("colors");
       if (e.ctrlKey) {
         handleRangeSelection(index);
       } else {
@@ -1306,16 +1310,77 @@ function selectColor(colorFolder, colorIndex) {
 // Rename Current Color Logic
 async function renameCurrentColor() {
   if (!currentPart || !currentColor || currentColor === "default") return;
+  openRenameModal(currentColor, "color");
+}
 
-  const newName = prompt(
-    `Nhập tên mới cho folder màu "${currentColor}":`,
-    currentColor,
-  );
-  if (!newName || newName === currentColor) return;
+let renameModalTarget = null; // { type: 'part'|'color', oldName: string }
 
-  // Basic validation
-  // if (!/^[a-zA-Z0-9_-]+$/.test(newName)) // Loose validation
+function openRenameModal(oldName, type) {
+  renameModalTarget = { type, oldName };
+  document.getElementById("rename-old-name").textContent = oldName;
+  const input = document.getElementById("rename-new-input");
+  input.value = oldName;
+  document.getElementById("rename-modal-title").textContent = 
+    type === "part" ? "Đổi tên bộ phận (X-Y-Z)" : "Đổi tên mã màu";
+  document.getElementById("rename-modal-overlay").style.display = "flex";
+  
+  setTimeout(() => {
+    input.focus();
+    input.select();
+  }, 100);
+}
 
+function closeRenameModal() {
+  document.getElementById("rename-modal-overlay").style.display = "none";
+}
+
+async function confirmRenameModal() {
+  const newName = document.getElementById("rename-new-input").value.trim();
+  if (!newName || !renameModalTarget) return;
+  
+  const { type, oldName } = renameModalTarget;
+  if (newName === oldName) {
+    closeRenameModal();
+    return;
+  }
+
+  closeRenameModal();
+  
+  if (type === "part") {
+    await executeRenamePartFolder(oldName, newName);
+  } else {
+    await executeRenameColorFolder(oldName, newName);
+  }
+}
+
+async function executeRenamePartFolder(oldName, newName) {
+  showLoading("Đang đổi tên thư mục...");
+  try {
+    const response = await fetch("/api/rename_folder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        old_name: oldName,
+        new_name: newName,
+      }),
+    });
+    const result = await response.json();
+    if (result.success) {
+      loadKitStructure(true);
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Lỗi kết nối server");
+  } finally {
+    hideLoading();
+  }
+}
+
+async function executeRenameColorFolder(oldName, newName) {
+  showLoading("Đang đổi tên màu...");
   try {
     const response = await fetch("/api/rename_color_folder", {
       method: "POST",
@@ -1323,42 +1388,28 @@ async function renameCurrentColor() {
       body: JSON.stringify({
         kit: CURRENT_KIT_FOLDER,
         part_folder: currentPart.part.folder,
-        old_color: currentColor,
+        old_color: oldName,
         new_color: newName,
       }),
     });
 
     const result = await response.json();
     if (result.success) {
-      // alert('Đổi tên thành công!');
-      // We need to refresh the part structure to reflect the new folder name
-      // Simplest way: Reload kit structure, find current part, re-render colors.
-      // A optimization: Manually update local data.
-      const index = currentPart.part.colors.indexOf(currentColor);
-      if (index !== -1) {
-        currentPart.part.colors[index] = newName;
-      }
-
-      // Also update characterLayers if using old color name
-      if (
-        characterLayers[currentPart.index] &&
-        characterLayers[currentPart.index].color === currentColor
-      ) {
+      const index = currentPart.part.colors.indexOf(oldName);
+      if (index !== -1) currentPart.part.colors[index] = newName;
+      if (characterLayers[currentPart.index] && characterLayers[currentPart.index].color === oldName) {
         characterLayers[currentPart.index].color = newName;
       }
-
-      // Re-load Colors UI
       loadColors(currentPart.part);
-      // Select new color
       setTimeout(() => selectColor(newName, index), 50);
-
-      // Re-render character to update image paths
       renderCharacter();
     } else {
       alert("Lỗi: " + result.message);
     }
   } catch (e) {
     alert("Lỗi server: " + e);
+  } finally {
+    hideLoading();
   }
 }
 
@@ -2552,34 +2603,7 @@ let mergeFilesList = [];
 let mergeCanvas, mctx;
 
 async function renamePartFolder(oldName) {
-  const newName = prompt(`Nhập tên mới cho thư mục "${oldName}":`, oldName);
-  if (!newName || newName === oldName) return;
-
-  showLoading("Đang đổi tên thư mục...");
-
-  try {
-    const response = await fetch("/api/rename_folder", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        kit: CURRENT_KIT_FOLDER,
-        old_name: oldName,
-        new_name: newName,
-      }),
-    });
-    const result = await response.json();
-    if (result.success) {
-      //  alert('Đổi tên thành công!');
-      loadKitStructure(true);
-    } else {
-      alert("Lỗi: " + result.message);
-    }
-  } catch (error) {
-    console.error(error);
-    alert("Lỗi kết nối server");
-  } finally {
-    hideLoading();
-  }
+  openRenameModal(oldName, "part");
 }
 
 async function flattenColors() {
@@ -3183,6 +3207,18 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (!currentPart) return;
+  
+  // F2 Shortcut for Rename
+  if (e.key === "F2") {
+    e.preventDefault();
+    // Default to part rename if in items or parts area, or if no area explicitly selected
+    if (activeFocusArea === "colors" && currentColor && currentColor !== "default") {
+      openRenameModal(currentColor, "color");
+    } else if (currentPart) {
+      openRenameModal(currentPart.part.folder, "part");
+    }
+    return;
+  }
 
   // Logic based on focused area
   if (activeFocusArea === "parts") {

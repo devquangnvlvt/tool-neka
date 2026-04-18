@@ -1943,6 +1943,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
 
     def handle_download_kit(self, data):
             kit_id = data.get('id')
+            custom_path = data.get('path') # Get custom path from frontend
             if not kit_id:
                 self.send_api_response(False, "Missing 'id' parameter")
                 return
@@ -1954,18 +1955,26 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 if os.path.exists(progress_file):
                     os.remove(progress_file)
 
-                # Gọi script download_neka_kit.py
-                subprocess.run(['python', 'download_neka_kit.py', str(kit_id)], check=True)
+                # Determine download base directory
+                output_base = custom_path if custom_path else DATA_DIR
+
+                # Gọi script download_neka_kit.py với tham số --out
+                cmd = ['python', 'download_neka_kit.py', str(kit_id)]
+                if custom_path:
+                    cmd.extend(['--out', custom_path])
+                
+                subprocess.run(cmd, check=True)
 
                 # Đường dẫn thư mục sau khi tải
                 kit_folder = f'neka_{kit_id}'
-                kit_path = os.path.join(DATA_DIR, kit_folder)
+                kit_path = os.path.join(output_base, kit_folder)
+                
                 if not os.path.exists(kit_path):
-                    self.send_api_response(False, f"Không tìm thấy dữ liệu cho kit {kit_id}")
+                    self.send_api_response(False, f"Không tìm thấy dữ liệu cho kit {kit_id} tại {kit_path}")
                     return
 
-                # Tạo file ZIP để tải về
-                zip_path = os.path.join(DATA_DIR, f"{kit_folder}.zip")
+                # Tạo file ZIP để tải về (Lưu zip vào temp hoặc ngay tại đó)
+                zip_path = os.path.join(output_base, f"{kit_folder}.zip")
                 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                     for root, _, files in os.walk(kit_path):
                         for file in files:
@@ -1984,16 +1993,12 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
                 self.wfile.write(zip_data)
 
-                # Cleanup progress file after successful download
-                temp_dir = tempfile.gettempdir()
-                progress_file = os.path.join(temp_dir, f"progress_{kit_id}.json")
+                # Cleanup progress
                 if os.path.exists(progress_file):
-                    try:
-                        os.remove(progress_file)
-                    except:
-                        pass
-
-                # Tùy chọn: xóa zip sau khi gửi để tiết kiệm dung lượng
+                    try: os.remove(progress_file)
+                    except: pass
+                
+                # Cleanup zip if needed
                 # os.remove(zip_path)
 
             except subprocess.CalledProcessError as e:

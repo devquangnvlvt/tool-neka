@@ -772,8 +772,18 @@ if __name__ == "__main__":
     kit_id = str(kit.get('id', 'unknown_id'))
     
     # Step 3: Create final directory structure
+    # Handle custom output directory
+    output_base = DATA_DIR
+    if "--out" in sys.argv:
+        try:
+            out_idx = sys.argv.index("--out")
+            if out_idx + 1 < len(sys.argv):
+                output_base = sys.argv[out_idx + 1]
+        except:
+            pass
+
     # Use ID-only naming to avoid Chinese characters in folder names
-    base_dir = os.path.join(DATA_DIR, f"neka_{kit_id}")
+    base_dir = os.path.join(output_base, f"neka_{kit_id}")
 
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)

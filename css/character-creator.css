@@ -1200,3 +1200,29 @@ body {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+
+
+.modal-custom-small {
+  max-width: 400px !important;
+  height: auto !important;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.p-20 { padding: 20px; }
+.m-b-20 { margin-bottom: 20px; }
+.m-b-5 { margin-bottom: 5px; }
+.d-block { display: block; }
+.font-12 { font-size: 12px; }
+.text-muted { color: #666; }
+.font-bold { font-weight: bold; }
+.w-100 { width: 100%; }
+.p-10 { padding: 10px; }
+.br-8 { border-radius: 8px; }
+.flex-justify-end { display: flex; justify-content: flex-end; }
+.flex-gap-10 { gap: 10px; }
+.btn-green { background: #27ae60; color: white; }
+.btn-green:hover { background: #2ecc71; }
+.debug-input { border: 1px solid #ddd; outline: none; }
+.debug-input:focus { border-color: #3498db; }
