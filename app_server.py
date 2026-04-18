@@ -832,26 +832,33 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             source_path = None
             source_filename = None
 
-            # 1. Nếu có item_number cụ thể
+            # 1. Ưu tiên tìm thumbnail (thumb_N.png) trước vì nó đã được resize/crop đẹp
             if item_number:
-                search_id = str(item_number)
-                # Thử tìm trong color folder (nếu có chọn màu)
-                if color and color != 'default':
-                    color_path = os.path.join(part_path, color)
-                    if os.path.exists(color_path):
+                thumb_name = f"thumb_{item_number}.png"
+                potential_thumb = os.path.join(part_path, thumb_name)
+                if os.path.exists(potential_thumb):
+                    source_path = potential_thumb
+                    source_filename = thumb_name
+                else:
+                    # Nếu không có thumbnail, mới tìm file ảnh gốc
+                    search_id = str(item_number)
+                    # Thử tìm trong color folder (nếu có chọn màu)
+                    if color and color != 'default':
+                        color_path = os.path.join(part_path, color)
+                        if os.path.exists(color_path):
+                            for ext in ['.png', '.webp']:
+                                if os.path.exists(os.path.join(color_path, search_id + ext)):
+                                    source_path = os.path.join(color_path, search_id + ext)
+                                    source_filename = search_id + ext
+                                    break
+                    
+                    # Nếu không thấy trong color folder, thử ở main folder
+                    if not source_path:
                         for ext in ['.png', '.webp']:
-                            if os.path.exists(os.path.join(color_path, search_id + ext)):
-                                source_path = os.path.join(color_path, search_id + ext)
+                            if os.path.exists(os.path.join(part_path, search_id + ext)):
+                                source_path = os.path.join(part_path, search_id + ext)
                                 source_filename = search_id + ext
                                 break
-                
-                # Nếu không thấy trong color folder, thử ở main folder
-                if not source_path:
-                    for ext in ['.png', '.webp']:
-                        if os.path.exists(os.path.join(part_path, search_id + ext)):
-                            source_path = os.path.join(part_path, search_id + ext)
-                            source_filename = search_id + ext
-                            break
 
             # 2. Logic cũ (Fallback)
             if not source_path:
