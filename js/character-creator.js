@@ -28,8 +28,8 @@ function saveSelectionState() {
   // Serialize only what we need: per-folder item + color and active part
   const snapshot = {
     _meta: {
-      activePartFolder: currentPart ? currentPart.part.folder : null
-    }
+      activePartFolder: currentPart ? currentPart.part.folder : null,
+    },
   };
   Object.entries(characterLayers).forEach(([idx, layer]) => {
     if (layer && layer.folderName) {
@@ -40,7 +40,10 @@ function saveSelectionState() {
       };
     }
   });
-  localStorage.setItem(`selection_${CURRENT_KIT_FOLDER}`, JSON.stringify(snapshot));
+  localStorage.setItem(
+    `selection_${CURRENT_KIT_FOLDER}`,
+    JSON.stringify(snapshot),
+  );
 }
 
 function restoreSelectionState() {
@@ -111,18 +114,19 @@ async function loadKitsList() {
       const parentSelector = document.getElementById("parent-selector");
       if (parentSelector) parentSelector.value = savedParent;
       currentParentFilter = savedParent;
-      
+
       if (savedParent !== "all") {
-        kits = allKits.filter(k => k.parent === savedParent);
+        kits = allKits.filter((k) => k.parent === savedParent);
       } else {
-        kits = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
+        kits = allKits.filter((k) => k.parent === "Mặc định (Ngoài)");
       }
 
       if (kits.length > 0) {
         // Check localStorage for saved kit
         let savedKit = localStorage.getItem("selectedKit");
         // Ensure saved kit actually exists within the currently filtered parent
-        let kitToSelect = savedKit && kits.find((k) => k.folder === savedKit)
+        let kitToSelect =
+          savedKit && kits.find((k) => k.folder === savedKit)
             ? kits.find((k) => k.folder === savedKit)
             : kits[0];
 
@@ -145,9 +149,10 @@ async function loadKitsList() {
 function renderParentSelector(parents) {
   const selector = document.getElementById("parent-selector");
   if (!selector) return;
-  
-  selector.innerHTML = '<option value="all">-- Mặc định (Thư mục ngoài) --</option>';
-  parents.forEach(p => {
+
+  selector.innerHTML =
+    '<option value="all">-- Mặc định (Thư mục ngoài) --</option>';
+  parents.forEach((p) => {
     const opt = document.createElement("option");
     opt.value = p;
     opt.textContent = p;
@@ -159,20 +164,24 @@ function renderParentSelector(parents) {
 function filterByCategory(parentName) {
   currentParentFilter = parentName;
   localStorage.setItem("selectedParent", parentName);
-  const searchTerm = document.getElementById("kit-search").value.toLowerCase().trim();
-  
+  const searchTerm = document
+    .getElementById("kit-search")
+    .value.toLowerCase()
+    .trim();
+
   let filtered = allKits;
   if (parentName !== "all") {
-    filtered = allKits.filter(k => k.parent === parentName);
+    filtered = allKits.filter((k) => k.parent === parentName);
   } else {
     // When "all" is selected, only show loose folders that are directly in DATA_DIR
-    filtered = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
+    filtered = allKits.filter((k) => k.parent === "Mặc định (Ngoài)");
   }
-  
+
   if (searchTerm) {
-    filtered = filtered.filter(kit => 
-      kit.name.toLowerCase().includes(searchTerm) || 
-      kit.folder.toLowerCase().includes(searchTerm)
+    filtered = filtered.filter(
+      (kit) =>
+        kit.name.toLowerCase().includes(searchTerm) ||
+        kit.folder.toLowerCase().includes(searchTerm),
     );
   }
 
@@ -181,26 +190,27 @@ function filterByCategory(parentName) {
 
   // Auto-select the first kit when a category is chosen
   if (filtered.length > 0) {
-      const kitSelector = document.getElementById("kit-selector");
-      if (kitSelector) {
-          kitSelector.value = filtered[0].folder;
-          switchKit(filtered[0].folder);
-      }
+    const kitSelector = document.getElementById("kit-selector");
+    if (kitSelector) {
+      kitSelector.value = filtered[0].folder;
+      switchKit(filtered[0].folder);
+    }
   } else {
-      // Clear current UI if no kits are found in this category
-      const navContainer = document.getElementById("nav-icons");
-      const countLayer = document.getElementById("count-layer");
-      const warningBox = document.getElementById("warning-box");
-      
-      if (navContainer) navContainer.innerHTML = "";
-      if (countLayer) countLayer.innerHTML = "";
-      if (warningBox) {
-          warningBox.style.display = "block";
-          warningBox.innerHTML = '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
-                                 '<strong>⚠️ Thông báo:</strong> Không có bộ sưu tập nào trong thư mục này.</div>';
-      }
-      kitStructure = [];
-      renderCharacter(); // Clear canvas
+    // Clear current UI if no kits are found in this category
+    const navContainer = document.getElementById("nav-icons");
+    const countLayer = document.getElementById("count-layer");
+    const warningBox = document.getElementById("warning-box");
+
+    if (navContainer) navContainer.innerHTML = "";
+    if (countLayer) countLayer.innerHTML = "";
+    if (warningBox) {
+      warningBox.style.display = "block";
+      warningBox.innerHTML =
+        '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
+        "<strong>⚠️ Thông báo:</strong> Không có bộ sưu tập nào trong thư mục này.</div>";
+    }
+    kitStructure = [];
+    renderCharacter(); // Clear canvas
   }
 }
 
@@ -212,13 +222,13 @@ async function fetchServerIP() {
     if (result.success && result.ip) {
       const display = document.getElementById("server-ip-display");
       if (display) {
-        display.textContent = `Server IP: ${result.ip}:${window.location.port || '8000'}`;
+        display.textContent = `Server IP: ${result.ip}:${window.location.port || "8000"}`;
       }
 
       // Replace hardcoded IPs in the header links
       const linkPicrew = document.getElementById("link-picrew");
       const linkNeka = document.getElementById("link-neka");
-      
+
       if (linkPicrew) {
         linkPicrew.href = `http://${result.ip}:3000/`;
       }
@@ -233,15 +243,15 @@ async function fetchServerIP() {
 
 // Global initialization
 document.addEventListener("DOMContentLoaded", () => {
-    fetchServerIP();
-    loadKitsList();
+  fetchServerIP();
+  loadKitsList();
 });
 
 // Render Kits Selector
 function renderKitsSelector(kitsToRender) {
   const selector = document.getElementById("kit-selector");
   const currentValue = selector.value || CURRENT_KIT_FOLDER;
-  
+
   selector.innerHTML = "";
 
   if (kitsToRender.length === 0) {
@@ -267,7 +277,7 @@ function renderKitsSelector(kitsToRender) {
     option.textContent = kit.name;
     // Highlight if search is empty OR it matches current kit
     if (!searchInput || searchInput.value.trim() === "") {
-        if (kit.folder === currentValue) option.selected = true;
+      if (kit.folder === currentValue) option.selected = true;
     }
     selector.appendChild(option);
   });
@@ -276,18 +286,19 @@ function renderKitsSelector(kitsToRender) {
 // Filter Kits
 function filterKits(query) {
   const searchTerm = query.toLowerCase().trim();
-  
+
   let filtered = allKits;
   if (currentParentFilter !== "all") {
-    filtered = allKits.filter(k => k.parent === currentParentFilter);
+    filtered = allKits.filter((k) => k.parent === currentParentFilter);
   } else {
-    filtered = allKits.filter(k => k.parent === "Mặc định (Ngoài)");
+    filtered = allKits.filter((k) => k.parent === "Mặc định (Ngoài)");
   }
 
   if (searchTerm) {
-    filtered = filtered.filter(kit => 
-      kit.name.toLowerCase().includes(searchTerm) || 
-      kit.folder.toLowerCase().includes(searchTerm)
+    filtered = filtered.filter(
+      (kit) =>
+        kit.name.toLowerCase().includes(searchTerm) ||
+        kit.folder.toLowerCase().includes(searchTerm),
     );
   }
 
@@ -428,17 +439,17 @@ async function loadKitStructure(preserveSelection = false) {
         // Matches by folderName (more robust during reordering/renaming)
         const oldLayers = { ...characterLayers };
         characterLayers = {};
-        
+
         kitStructure.forEach((part, newIdx) => {
           // Find if this part was selected before (by folder name)
           const oldIdx = Object.keys(oldLayers).find(
-            (oIdx) => oldLayers[oIdx].folderName === part.folder
+            (oIdx) => oldLayers[oIdx].folderName === part.folder,
           );
-          
+
           if (oldIdx !== undefined) {
-             const layer = oldLayers[oldIdx];
-             layer.sortOrder = part.x * 1000 + newIdx;
-             characterLayers[newIdx] = layer;
+            const layer = oldLayers[oldIdx];
+            layer.sortOrder = part.x * 1000 + newIdx;
+            characterLayers[newIdx] = layer;
           }
         });
       }
@@ -448,7 +459,9 @@ async function loadKitStructure(preserveSelection = false) {
         restoreSelectionState();
       }
 
-      initializeApp(preserveSelection || Object.keys(characterLayers).length > 0);
+      initializeApp(
+        preserveSelection || Object.keys(characterLayers).length > 0,
+      );
       hideGlobalLoading();
     } else {
       hideGlobalLoading();
@@ -463,20 +476,23 @@ async function loadKitStructure(preserveSelection = false) {
 // Initialize app
 function initializeApp(preserveSelection = false) {
   if (!kitStructure || kitStructure.length === 0) {
-    console.error("No kit structure loaded. The selected kit folder might be empty or in an incorrect format.");
+    console.error(
+      "No kit structure loaded. The selected kit folder might be empty or in an incorrect format.",
+    );
     // Show a user-friendly message in the warning box
     const warningBox = document.getElementById("warning-box");
     if (warningBox) {
-        warningBox.style.display = "block";
-        warningBox.innerHTML = '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
-                               '<strong>⚠️ Thông báo:</strong> Thư mục bộ sưu tập này hiện đang trống hoặc không đúng định dạng (X-Y-Tên-Thư-Mục).</div>';
+      warningBox.style.display = "block";
+      warningBox.innerHTML =
+        '<div style="color: #ff9800; padding: 10px; border: 1px solid #ff9800; border-radius: 4px; background: rgba(255, 152, 0, 0.1);">' +
+        "<strong>⚠️ Thông báo:</strong> Thư mục bộ sưu tập này hiện đang trống hoặc không đúng định dạng (X-Y-Tên-Thư-Mục).</div>";
     }
     // Clear navigation headers
     const navContainer = document.getElementById("nav-icons");
     const countLayer = document.getElementById("count-layer");
     if (navContainer) navContainer.innerHTML = "";
     if (countLayer) countLayer.innerHTML = "";
-    
+
     // Clear the canvas and UI layers
     resetCharacter();
     renderCharacter();
@@ -493,7 +509,7 @@ function initializeApp(preserveSelection = false) {
 
   // Prepare indices for sorting to maintain part mapping
   let indices = kitStructure.map((_, i) => i);
-  
+
   if (partSortType === "x") {
     indices.sort((a, b) => {
       const pA = kitStructure[a];
@@ -512,7 +528,7 @@ function initializeApp(preserveSelection = false) {
 
   // Filter by Z component
   if (currentZFilter !== "all") {
-    indices = indices.filter(index => {
+    indices = indices.filter((index) => {
       const folder = kitStructure[index].folder;
       const match = folder.match(/^\d+-\d+-(\d+)/);
       if (match) return match[1] === currentZFilter;
@@ -520,7 +536,7 @@ function initializeApp(preserveSelection = false) {
       return currentZFilter === "1";
     });
   }
-  
+
   currentSortedIndices = [...indices];
 
   indices.forEach((index) => {
@@ -530,13 +546,13 @@ function initializeApp(preserveSelection = false) {
     navIcon.dataset.partIndex = index;
     navIcon.dataset.folderName = part.folder;
     navIcon.draggable = true;
-    
+
     // Drag and Drop Events
-    navIcon.addEventListener('dragstart', handleNavDragStart);
-    navIcon.addEventListener('dragover', handleNavDragOver);
-    navIcon.addEventListener('dragleave', handleNavDragLeave);
-    navIcon.addEventListener('drop', handleNavDrop);
-    navIcon.addEventListener('dragend', handleNavDragEnd);
+    navIcon.addEventListener("dragstart", handleNavDragStart);
+    navIcon.addEventListener("dragover", handleNavDragOver);
+    navIcon.addEventListener("dragleave", handleNavDragLeave);
+    navIcon.addEventListener("drop", handleNavDrop);
+    navIcon.addEventListener("dragend", handleNavDragEnd);
 
     if (part.is_separated) {
       navIcon.classList.add("separated");
@@ -545,7 +561,7 @@ function initializeApp(preserveSelection = false) {
 
     const img = document.createElement("img");
     const navBase = `${KIT_PATH}${part.folder}/nav`;
-    
+
     const tryLoadNav = (imgEl, base, extensions) => {
       let currentExtIdx = 0;
       const tryNext = () => {
@@ -591,29 +607,37 @@ function initializeApp(preserveSelection = false) {
 
     navContainer.appendChild(navIcon);
 
-    // If not preserving or if we lost the selection, reset to default if needed
-    if (!characterLayers[index] && part.items_count > 0) {
-      const firstColor = part.colors.length > 0 ? part.colors[0] : "default";
-      internalSelectItem(index, 1, part, firstColor, 0);
+    // Removed auto-select item 1 logic to prevent unwanted selections when resetting/deleting
+    if (!characterLayers[index]) {
+      characterLayers[index] = {
+        folderName: part.folder,
+        itemNumber: -1,
+        color: "default",
+        colorIndex: 0,
+        sortOrder: part.x * 1000 + index,
+      };
     }
   });
 
   // Update count to reflect filtered/total view
   const totalCount = kitStructure.length;
   const visibleCount = indices.length;
-  countLayer.textContent = currentZFilter === "all"
-    ? `(${totalCount})`
-    : `(${visibleCount}/${totalCount})`;
+  countLayer.textContent =
+    currentZFilter === "all"
+      ? `(${totalCount})`
+      : `(${visibleCount}/${totalCount})`;
 
   // Re-render canvas but keep layers
   renderCharacter();
 
   // Reselect the part to refresh item grid
   let targetIdx = preserveSelection ? savedPartIndex : 0;
-  
+
   // If we have a restored active part folder, find its index
   if (restoredActivePartFolder) {
-    const foundIdx = kitStructure.findIndex(p => p.folder === restoredActivePartFolder);
+    const foundIdx = kitStructure.findIndex(
+      (p) => p.folder === restoredActivePartFolder,
+    );
     if (foundIdx !== -1) targetIdx = foundIdx;
     restoredActivePartFolder = null; // Use it only once per fresh load
   }
@@ -623,13 +647,21 @@ function initializeApp(preserveSelection = false) {
     // Restore color: first try from characterLayers (restored state), then from savedColorIdx
     const restoredLayer = characterLayers[targetIdx];
     if (restoredLayer && restoredLayer.color) {
-      const colorIdx = kitStructure[targetIdx].colors.indexOf(restoredLayer.color);
+      const colorIdx = kitStructure[targetIdx].colors.indexOf(
+        restoredLayer.color,
+      );
       if (colorIdx !== -1) {
         selectColor(restoredLayer.color, colorIdx);
       } else if (kitStructure[targetIdx].colors.length > savedColorIdx) {
-        selectColor(kitStructure[targetIdx].colors[savedColorIdx], savedColorIdx);
+        selectColor(
+          kitStructure[targetIdx].colors[savedColorIdx],
+          savedColorIdx,
+        );
       }
-    } else if (preserveSelection && kitStructure[targetIdx].colors.length > savedColorIdx) {
+    } else if (
+      preserveSelection &&
+      kitStructure[targetIdx].colors.length > savedColorIdx
+    ) {
       selectColor(kitStructure[targetIdx].colors[savedColorIdx], savedColorIdx);
     }
   }
@@ -639,11 +671,15 @@ function initializeApp(preserveSelection = false) {
 // Change Part Sort Type
 function changePartSort(type) {
   partSortType = type;
-  
+
   // Update Buttons UI
-  document.getElementById("sort-x-btn").classList.toggle("active", type === "x");
-  document.getElementById("sort-y-btn").classList.toggle("active", type === "y");
-  
+  document
+    .getElementById("sort-x-btn")
+    .classList.toggle("active", type === "x");
+  document
+    .getElementById("sort-y-btn")
+    .classList.toggle("active", type === "y");
+
   // Re-initialize app to re-render nav icons
   initializeApp(true);
 }
@@ -666,13 +702,13 @@ async function shiftCoordinates(delta) {
     alert("Vui lòng chọn một bộ phận trước!");
     return;
   }
-  
+
   const type = partSortType; // 'x' or 'y'
   // Find current position in visual order
   const startPos = currentSortedIndices.indexOf(currentPart.index);
   if (startPos === -1) {
-      alert("Không tìm thấy vị trí bộ phận trong danh sách hiển thị.");
-      return;
+    alert("Không tìm thấy vị trí bộ phận trong danh sách hiển thị.");
+    return;
   }
 
   const renames = [];
@@ -680,15 +716,15 @@ async function shiftCoordinates(delta) {
   for (let i = startPos; i < currentSortedIndices.length; i++) {
     const partIdx = currentSortedIndices[i];
     const part = kitStructure[partIdx];
-    
+
     // Regex matches X-Y-Z or X-Y
     const match = part.folder.match(/^(\d+)-(\d+)(?:-(.*))?$/);
     if (match) {
       let x = parseInt(match[1]);
       let y = parseInt(match[2]);
       const suffix = match[3] ? `-${match[3]}` : "";
-      
-      if (type === 'x') x += delta;
+
+      if (type === "x") x += delta;
       else y += delta;
 
       if (x < 0) x = 0;
@@ -702,11 +738,11 @@ async function shiftCoordinates(delta) {
   }
 
   if (renames.length === 0) {
-      alert("Không có thay đổi nào cần thực hiện.");
-      return;
+    alert("Không có thay đổi nào cần thực hiện.");
+    return;
   }
 
-  const msg = `Bạn có chắc muốn cập nhật ${type.toUpperCase()} (${delta > 0 ? '+' : ''}${delta}) cho các bộ phận từ "${currentPart.part.folder}" về sau (${renames.length} bộ phận)?`;
+  const msg = `Bạn có chắc muốn cập nhật ${type.toUpperCase()} (${delta > 0 ? "+" : ""}${delta}) cho các bộ phận từ "${currentPart.part.folder}" về sau (${renames.length} bộ phận)?`;
   if (!confirm(msg)) return;
 
   try {
@@ -714,16 +750,18 @@ async function shiftCoordinates(delta) {
     const response = await fetch("/api/reorder_parts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kit: CURRENT_KIT_FOLDER, renames })
+      body: JSON.stringify({ kit: CURRENT_KIT_FOLDER, renames }),
     });
     const result = await response.json();
     if (result.success) {
       // Set new folder name for selection restoration
-      const selectedRename = renames.find(r => r.old === currentPart.part.folder);
+      const selectedRename = renames.find(
+        (r) => r.old === currentPart.part.folder,
+      );
       if (selectedRename) {
         restoredActivePartFolder = selectedRename.new;
       }
-      
+
       await loadKitStructure(true);
       // Removed alert to keep it smooth, but could add notification
     } else {
@@ -774,7 +812,7 @@ function selectPart(index, part) {
   nameContainer.innerHTML = `
                 ${part.display_name || part.folder}
                 <div class="btn-group" style="display:inline-flex; gap:5px; margin-left:8px;">
-                     <button class="btn" style="padding:2px 6px; font-size:12px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này">✎</button>
+                     <button class="btn" style="padding:2px 6px; font-size:12px; background:#f1c40f;" onclick="renamePartFolder('${part.folder}')" title="Đổi tên thư mục này (f2)">✎</button>
                      <button class="btn" style="padding:2px 6px; font-size:12px; background:#3498db;" onclick="showFolderFiles()" title="Xem file trong folder">📂</button>
                 </div>
             `;
@@ -858,16 +896,17 @@ async function loadItems(part) {
 
     // Determine thumb path: trying .png then .webp
     const itemPathBase = `${KIT_PATH}${part.folder}/${itemNum}`; // Corrected itemNumber to itemNum
-    const colorItemPathBase = currentColor && currentColor !== "default"
-      ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}` // Corrected itemNumber to itemNum
-      : null;
+    const colorItemPathBase =
+      currentColor && currentColor !== "default"
+        ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}` // Corrected itemNumber to itemNum
+        : null;
 
     const thumbPathBase = `${KIT_PATH}${part.folder}/thumb_${itemNum}`; // Corrected itemNumber to itemNum
 
     // Set initial src to .png and use onerror to fallback to .webp
     const tryLoadImage = (imgEl, base, extensions, finalFallback = null) => {
       let currentExtIdx = 0;
-      
+
       const tryNext = () => {
         if (currentExtIdx < extensions.length) {
           const ext = extensions[currentExtIdx++];
@@ -884,11 +923,11 @@ async function loadItems(part) {
     };
 
     if (showColorThumb && colorItemPathBase) {
-      tryLoadImage(img, colorItemPathBase, ['png', 'webp'], () => {
-         tryLoadImage(img, thumbPathBase, ['png', 'webp']);
+      tryLoadImage(img, colorItemPathBase, ["png", "webp"], () => {
+        tryLoadImage(img, thumbPathBase, ["png", "webp"]);
       });
     } else {
-      tryLoadImage(img, thumbPathBase, ['png', 'webp']);
+      tryLoadImage(img, thumbPathBase, ["png", "webp"]);
     }
 
     img.loading = "lazy";
@@ -964,12 +1003,12 @@ async function loadColors(part) {
   controlsDiv.innerHTML = `
                 <span style="font-weight:bold;">Màu sắc (${colorCount}) <span id="selected-color-count" style="font-weight:normal; font-size: 11px; color: #666; margin-left: 5px;"></span></span>
                 <div style="display: flex; gap: 5px;">
-                    <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu</button>
-                    <button id="reorder-images-btn" onclick="reorderPartImages()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #34495e; color: white; border: none; border-radius: 4px;" title="Sắp xếp lại tên ảnh từ 1 tới N trong các folder (Bỏ qua Thumb/Nav)">Sắp xếp ảnh</button>
-                    <button id="fix-colors-by-point-btn" onclick="openColorPickerModal()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 4px;" title="Chọn 1 điểm trên ảnh để tự động sửa mã màu cho TOÀN BỘ folder màu khác">Fix theo điểm</button>
+                    <button id="fix-all-colors-btn" onclick="fixAllPartColorCodes()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px;" title="Tự động sửa tên TOÀN BỘ folder màu trong bộ phận này">Fix toàn bộ màu (Q)</button>
+                    <button id="reorder-images-btn" onclick="reorderPartImages()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #34495e; color: white; border: none; border-radius: 4px;" title="Sắp xếp lại tên ảnh từ 1 tới N trong các folder (Bỏ qua Thumb/Nav)">Sắp xếp ảnh (W)</button>
+                    <button id="fix-colors-by-point-btn" onclick="openColorPickerModal()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 4px;" title="Chọn 1 điểm trên ảnh để tự động sửa mã màu cho TOÀN BỘ folder màu khác">Fix theo điểm (E)</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
                     <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
-                    <button id="delete-unselected-colors-btn" onclick="confirmDeleteUnselectedColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #f39c12; color: white; border: none; border-radius: 4px;">Xóa màu không chọn</button>
+                    <button id="delete-unselected-colors-btn" onclick="confirmDeleteUnselectedColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #f39c12; color: white; border: none; border-radius: 4px;">Xóa màu không chọn (R)</button>
                     <button id="delete-colors-btn" onclick="confirmDeleteColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 4px;">Xóa màu đã chọn (F)</button>
                 </div>
             `;
@@ -1097,50 +1136,53 @@ let selectedColorPickerFilename = "1.png";
 
 function openColorPickerModal() {
   if (!currentPart) return;
-  
+
   const modal = document.getElementById("color-picker-modal");
   const img = document.getElementById("color-picker-img");
   const marker = document.getElementById("color-picker-marker");
   const info = document.getElementById("color-picker-info");
   const confirmBtn = document.getElementById("confirm-fix-by-point-btn");
-  
+
   modal.style.display = "flex";
   marker.style.display = "none";
   confirmBtn.disabled = true;
   info.textContent = "Đang tải ảnh...";
   selectedPointCoords = null;
-  
+
   // Xác định tên tệp ảnh dựa trên Item đang chọn
-  selectedColorPickerFilename = (currentItem && currentItem > 0) ? `${currentItem}.png` : "1.png";
-  
+  selectedColorPickerFilename =
+    currentItem && currentItem > 0 ? `${currentItem}.png` : "1.png";
+
   // Lấy ảnh mẫu
   const colorFolder = currentColor || "default";
   let sampleImagePath = "";
-  
+
   if (colorFolder === "default") {
     sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${selectedColorPickerFilename}`;
   } else {
     sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${colorFolder}/${selectedColorPickerFilename}`;
   }
-  
+
   img.src = `${sampleImagePath}?v=${imgVers}`;
-  
+
   img.onload = () => {
     info.textContent = `Vui lòng click vào một điểm trên ảnh ${selectedColorPickerFilename} (${img.naturalWidth}x${img.naturalHeight}px).`;
     img.onclick = (e) => handleColorPickerClick(e, img);
   };
-  
+
   img.onerror = () => {
     if (selectedColorPickerFilename !== "1.png") {
-        console.log(`Không tìm thấy ${selectedColorPickerFilename}, thử lại với 1.png`);
-        selectedColorPickerFilename = "1.png";
-        if (colorFolder === "default") {
-          sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/1.png`;
-        } else {
-          sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${colorFolder}/1.png`;
-        }
-        img.src = `${sampleImagePath}?v=${imgVers}`;
-        return;
+      console.log(
+        `Không tìm thấy ${selectedColorPickerFilename}, thử lại với 1.png`,
+      );
+      selectedColorPickerFilename = "1.png";
+      if (colorFolder === "default") {
+        sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/1.png`;
+      } else {
+        sampleImagePath = `${KIT_PATH}${currentPart.part.folder}/${colorFolder}/1.png`;
+      }
+      img.src = `${sampleImagePath}?v=${imgVers}`;
+      return;
     }
     info.textContent = `Không tìm thấy tệp ảnh làm mẫu (${selectedColorPickerFilename}).`;
     img.src = "img/placeholder.png";
@@ -1151,25 +1193,25 @@ function handleColorPickerClick(e, imgEl) {
   const rect = imgEl.getBoundingClientRect();
   const offsetX = e.clientX - rect.left;
   const offsetY = e.clientY - rect.top;
-  
+
   // Calculate original coordinates
   const scaleX = imgEl.naturalWidth / rect.width;
   const scaleY = imgEl.naturalHeight / rect.height;
-  
+
   const originalX = Math.round(offsetX * scaleX);
   const originalY = Math.round(offsetY * scaleY);
-  
+
   selectedPointCoords = { x: originalX, y: originalY };
-  
+
   // UI Update
   const marker = document.getElementById("color-picker-marker");
   marker.style.left = `${offsetX}px`;
   marker.style.top = `${offsetY}px`;
   marker.style.display = "block";
-  
+
   const confirmBtn = document.getElementById("confirm-fix-by-point-btn");
   confirmBtn.disabled = false;
-  
+
   const info = document.getElementById("color-picker-info");
   info.textContent = `Đã chọn tọa độ: X=${originalX}, Y=${originalY} | File: ${selectedColorPickerFilename}`;
 }
@@ -1180,14 +1222,18 @@ function closeColorPickerModal() {
 
 async function confirmFixColorsByPoint() {
   if (!currentPart || !selectedPointCoords) return;
-  
-  if (!confirm(`Bạn có chắc chắn muốn lấy mã màu tại điểm (${selectedPointCoords.x}, ${selectedPointCoords.y}) của tệp "1.png" để sửa tên cho TOÀN BỘ folder màu trong bộ phận "${currentPart.part.folder}"?`)) {
+
+  if (
+    !confirm(
+      `Bạn có chắc chắn muốn lấy mã màu tại điểm (${selectedPointCoords.x}, ${selectedPointCoords.y}) của tệp "1.png" để sửa tên cho TOÀN BỘ folder màu trong bộ phận "${currentPart.part.folder}"?`,
+    )
+  ) {
     return;
   }
-  
+
   closeColorPickerModal();
   showGlobalLoading("Đang xử lý đổi tên theo điểm chọn...");
-  
+
   try {
     const response = await fetch("/api/fix_colors_by_point", {
       method: "POST",
@@ -1197,15 +1243,15 @@ async function confirmFixColorsByPoint() {
         part_folder: currentPart.part.folder,
         x: selectedPointCoords.x,
         y: selectedPointCoords.y,
-        filename: selectedColorPickerFilename
-      })
+        filename: selectedColorPickerFilename,
+      }),
     });
-    
+
     const result = await response.json();
     if (result.success) {
       // Reload structure to see changes
       await switchKit(CURRENT_KIT_FOLDER);
-      
+
       let msg = `Thành công! Đã đổi tên ${result.processed_count} thư mục màu.`;
       if (result.errors && result.errors.length > 0) {
         msg += `\nLưu ý các lỗi: \n- ${result.errors.join("\n- ")}`;
@@ -1237,7 +1283,7 @@ function selectItem(itemNumber) {
       itemNumber: -1,
       color: currentColor || "default",
       colorIndex: currentColorIndex || 0,
-      sortOrder: currentPart.part.x * 1000 + currentPart.index
+      sortOrder: currentPart.part.x * 1000 + currentPart.index,
     };
     renderCharacter();
     saveSelectionState();
@@ -1330,10 +1376,10 @@ function openRenameModal(oldName, type) {
   document.getElementById("rename-old-name").textContent = oldName;
   const input = document.getElementById("rename-new-input");
   input.value = oldName;
-  document.getElementById("rename-modal-title").textContent = 
+  document.getElementById("rename-modal-title").textContent =
     type === "part" ? "Đổi tên bộ phận (X-Y-Z)" : "Đổi tên mã màu";
   document.getElementById("rename-modal-overlay").style.display = "flex";
-  
+
   setTimeout(() => {
     input.focus();
     input.select();
@@ -1347,7 +1393,7 @@ function closeRenameModal() {
 async function confirmRenameModal() {
   const newName = document.getElementById("rename-new-input").value.trim();
   if (!newName || !renameModalTarget) return;
-  
+
   const { type, oldName } = renameModalTarget;
   if (newName === oldName) {
     closeRenameModal();
@@ -1355,7 +1401,7 @@ async function confirmRenameModal() {
   }
 
   closeRenameModal();
-  
+
   if (type === "part") {
     await executeRenamePartFolder(oldName, newName);
   } else {
@@ -1407,7 +1453,10 @@ async function executeRenameColorFolder(oldName, newName) {
     if (result.success) {
       const index = currentPart.part.colors.indexOf(oldName);
       if (index !== -1) currentPart.part.colors[index] = newName;
-      if (characterLayers[currentPart.index] && characterLayers[currentPart.index].color === oldName) {
+      if (
+        characterLayers[currentPart.index] &&
+        characterLayers[currentPart.index].color === oldName
+      ) {
         characterLayers[currentPart.index].color = newName;
       }
       loadColors(currentPart.part);
@@ -1464,8 +1513,10 @@ async function fixCurrentColorCode() {
         loadColors(currentPart.part);
         setTimeout(() => selectColor(newName, index), 50);
         renderCharacter();
-        
-        console.log(`Đã sửa mã màu: ${oldName} -> ${newName} (${result.detected})`);
+
+        console.log(
+          `Đã sửa mã màu: ${oldName} -> ${newName} (${result.detected})`,
+        );
       } else {
         alert(result.message);
       }
@@ -1491,7 +1542,10 @@ async function fixAllPartColorCodes() {
     return;
   }
 
-  showLoading(true, `Đang xử lý toàn bộ folder màu của "${currentPart.part.folder}"...`);
+  showLoading(
+    true,
+    `Đang xử lý toàn bộ folder màu của "${currentPart.part.folder}"...`,
+  );
 
   try {
     const response = await fetch("/api/fix_all_part_colors", {
@@ -1508,7 +1562,7 @@ async function fixAllPartColorCodes() {
       if (result.processed_count > 0) {
         // Success with changes
         await switchKit(CURRENT_KIT_FOLDER); // This re-fetches everything
-        
+
         let msg = `Đã sửa xong ${result.processed_count} mã màu.`;
         if (result.errors && result.errors.length > 0) {
           msg += `\nLỗi tại: ${result.errors.join(", ")}`;
@@ -1534,8 +1588,8 @@ async function reorderPartImages() {
   if (
     !confirm(
       `Bạn có chắc muốn sắp xếp lại tên ảnh (từ 1 tới N) cho toàn bộ thư mục trong bộ phận "${currentPart.part.folder}"?\n` +
-      `- Sẽ tự động bỏ qua các ảnh thumbnail và nav.png.\n` +
-      `- Thao tác này sẽ thay đổi tên tệp thực tế trên server.`
+        `- Sẽ tự động bỏ qua các ảnh thumbnail và nav.png.\n` +
+        `- Thao tác này sẽ thay đổi tên tệp thực tế trên server.`,
     )
   ) {
     return;
@@ -1556,7 +1610,7 @@ async function reorderPartImages() {
     const result = await response.json();
     if (result.success) {
       // Reload kit structure to reflect new numbering
-      await loadKitStructure(true); 
+      await loadKitStructure(true);
       alert(result.message);
     } else {
       alert("Lỗi: " + result.message);
@@ -1660,7 +1714,9 @@ function updateSelectedColorCount() {
   if (!countSpan) return;
 
   // Số lượng mã màu trong bộ phận hiện tại khớp với danh sách chọn toàn cục
-  const localChecked = document.querySelectorAll(".color-checkbox:checked").length;
+  const localChecked = document.querySelectorAll(
+    ".color-checkbox:checked",
+  ).length;
   const globalCount = globallySelectedColors.size;
 
   if (globalCount > 0) {
@@ -1675,11 +1731,11 @@ function updateSelectedColorCount() {
 // Bỏ chọn tất cả màu đã chọn toàn cục
 function clearGloballySelectedColors() {
   globallySelectedColors.clear();
-  
+
   // Bỏ tích tất cả checkbox đang hiển thị
   const checkboxes = document.querySelectorAll(".color-checkbox");
-  checkboxes.forEach(cb => cb.checked = false);
-  
+  checkboxes.forEach((cb) => (cb.checked = false));
+
   updateSelectedColorCount();
 }
 
@@ -1689,21 +1745,24 @@ function copySelectedColorCodes() {
     alert("Chưa có màu nào được chọn để copy!");
     return;
   }
-  
+
   const codes = Array.from(globallySelectedColors).join(", ");
-  navigator.clipboard.writeText(codes).then(() => {
-    alert(`✅ Đã copy ${globallySelectedColors.size} mã màu vào bộ nhớ tạm.`);
-  }).catch(err => {
-    console.error("Lỗi copy:", err);
-    // Fallback nếu clipboard API lỗi
-    const tempInput = document.createElement("input");
-    tempInput.value = codes;
-    document.body.appendChild(tempInput);
-    tempInput.select();
-    document.execCommand("copy");
-    document.body.removeChild(tempInput);
-    alert("✅ Đã copy mã màu (fallback).");
-  });
+  navigator.clipboard
+    .writeText(codes)
+    .then(() => {
+      alert(`✅ Đã copy ${globallySelectedColors.size} mã màu vào bộ nhớ tạm.`);
+    })
+    .catch((err) => {
+      console.error("Lỗi copy:", err);
+      // Fallback nếu clipboard API lỗi
+      const tempInput = document.createElement("input");
+      tempInput.value = codes;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand("copy");
+      document.body.removeChild(tempInput);
+      alert("✅ Đã copy mã màu (fallback).");
+    });
 }
 
 // Update character
@@ -1746,7 +1805,7 @@ async function renderCharacter() {
 
     try {
       // Thử tải .png trước, nếu lỗi thử .webp
-      return await loadImageWithFallback(imagePathBase, ['png', 'webp']);
+      return await loadImageWithFallback(imagePathBase, ["png", "webp"]);
     } catch (error) {
       console.error(`Failed to load: ${imagePathBase}`);
       return null;
@@ -1814,6 +1873,36 @@ function resetCharacter() {
   document.getElementById("current-part-name").textContent = "Chọn một bộ phận";
 }
 
+// Reset all layers (select None for all parts)
+function resetAllLayers() {
+  
+  characterLayers = {};
+  if (kitStructure) {
+    kitStructure.forEach((part, index) => {
+      characterLayers[index] = {
+        folderName: part.folder,
+        itemNumber: -1,
+        color: "default",
+        colorIndex: 0,
+        sortOrder: part.x * 1000 + index,
+      };
+    });
+  }
+  renderCharacter();
+  saveSelectionState();
+
+  // Update UI
+  if (currentPart) selectPart(currentPart.index, currentPart.part);
+  
+  // Update UI to show all items as "None"
+  document.querySelectorAll(".item-option").forEach((item) => {
+    item.classList.remove("active");
+  });
+  document.querySelectorAll(".item-none").forEach((none) => {
+    none.classList.add("active");
+  });
+}
+
 // Randomize character
 async function randomizeCharacter() {
   if (!kitStructure || kitStructure.length === 0) return;
@@ -1825,7 +1914,13 @@ async function randomizeCharacter() {
 
     // 85% chance to select an item, 15% chance to skip (None)
     if (Math.random() < 0.15) {
-      delete characterLayers[partIndex];
+      characterLayers[partIndex] = {
+        folderName: part.folder,
+        itemNumber: -1,
+        color: "default",
+        colorIndex: 0,
+        sortOrder: part.x * 1000 + partIndex,
+      };
       continue;
     }
 
@@ -1851,33 +1946,6 @@ async function randomizeCharacter() {
   if (currentPart) {
     selectPart(currentPart.index, currentPart.part);
   }
-}
-
-// Reset all layers (select None for all parts)
-function resetAllLayers() {
-  characterLayers = {};
-  if (kitStructure) {
-    kitStructure.forEach((part, index) => {
-      characterLayers[index] = {
-        folderName: part.folder,
-        itemNumber: -1,
-        color: "default",
-        colorIndex: 0,
-        sortOrder: part.x * 1000 + index
-      };
-    });
-  }
-  renderCharacter();
-
-  // Update UI to show all parts as "None" selected
-  document.querySelectorAll(".item-option").forEach((item) => {
-    item.classList.remove("active");
-  });
-  document.querySelectorAll(".item-none").forEach((none) => {
-    none.classList.add("active");
-  });
-
-  saveSelectionState();
 }
 
 async function downloadZip() {
@@ -2458,7 +2526,7 @@ async function uploadNavFile(input) {
         body: JSON.stringify({
           kit: CURRENT_KIT_FOLDER,
           folder: currentPart.part.folder,
-          filename: file.name.startsWith('nav') ? file.name : "nav.png", // Keep original if it's a nav file, otherwise default to png
+          filename: file.name.startsWith("nav") ? file.name : "nav.png", // Keep original if it's a nav file, otherwise default to png
           file_content: base64Content,
           color: colorParam,
         }),
@@ -2497,8 +2565,8 @@ async function batchDeleteAndReorder() {
   let indices = [];
   const cleanedValue = value.replace(/\s*-\s*/g, "-");
   const segments = cleanedValue.split(/[\s,;]+/);
-  
-  segments.forEach(seg => {
+
+  segments.forEach((seg) => {
     if (seg.includes("-")) {
       const parts = seg.split("-");
       if (parts.length === 2) {
@@ -2717,7 +2785,7 @@ async function mergeLayers() {
   document.getElementById("merge-dest-name").value = "1";
   const processBtn = document.getElementById("process-queue-btn");
   if (processBtn) processBtn.disabled = true;
-  
+
   mctx.clearRect(0, 0, mergeCanvas.width, mergeCanvas.height);
 
   try {
@@ -2919,7 +2987,12 @@ async function redrawMergePreview() {
           tempCtx.drawImage(img, 0, 0);
 
           // Get image data
-          const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+          const imageData = tempCtx.getImageData(
+            0,
+            0,
+            tempCanvas.width,
+            tempCanvas.height,
+          );
           const data = imageData.data;
 
           // Parse target color
@@ -2951,7 +3024,13 @@ async function redrawMergePreview() {
 
         // Standardize rendering behavior to match the main view (renderCharacter)
         // This ensures that positioning is identical between the main canvas and the merge modal.
-        mctx.drawImage(drawableSource, 0, 0, mergeCanvas.width, mergeCanvas.height);
+        mctx.drawImage(
+          drawableSource,
+          0,
+          0,
+          mergeCanvas.width,
+          mergeCanvas.height,
+        );
 
         resolve();
       };
@@ -3257,12 +3336,16 @@ window.addEventListener("keydown", (e) => {
   }
 
   if (!currentPart) return;
-  
+
   // F2 Shortcut for Rename
   if (e.key === "F2") {
     e.preventDefault();
     // Default to part rename if in items or parts area, or if no area explicitly selected
-    if (activeFocusArea === "colors" && currentColor && currentColor !== "default") {
+    if (
+      activeFocusArea === "colors" &&
+      currentColor &&
+      currentColor !== "default"
+    ) {
       openRenameModal(currentColor, "color");
     } else if (currentPart) {
       openRenameModal(currentPart.part.folder, "part");
@@ -3343,6 +3426,7 @@ window.addEventListener("keydown", (e) => {
       .split(" ").length;
 
     let newIndex = currentColorIndex;
+    // phím tắt
     switch (e.key) {
       case "ArrowLeft":
         newIndex = currentColorIndex - 1;
@@ -3366,6 +3450,57 @@ window.addEventListener("keydown", (e) => {
       case "f":
       case "F":
         confirmDeleteColors();
+        e.preventDefault();
+        return;
+      case "z":
+      case "Z":
+        randomizeCharacter();
+        e.preventDefault();
+        return;
+      case "x":
+      case "X":
+        resetAllLayers();
+        e.preventDefault();
+        c;
+        return;
+      case "c":
+      case "C":
+        autoCreateThumbs();
+        e.preventDefault();
+        return;
+      case "v":
+      case "V":
+        deleteAllThumbs();
+        e.preventDefault();
+        return;
+      case "q":
+      case "Q":
+        fixAllPartColorCodes();
+        e.preventDefault();
+        return;
+      case "w":
+      case "W":
+        reorderPartImages();
+        e.preventDefault();
+        return;
+      case "e":
+      case "E":
+        openColorPickerModal();
+        e.preventDefault();
+        return;
+      case "r":
+      case "R":
+        confirmDeleteUnselectedColors();
+        e.preventDefault();
+        return;
+      case "t":
+      case "T":
+        createPartNav();
+        e.preventDefault();
+        return;
+      case "a":
+      case "A":
+        promptDeletePart();
         e.preventDefault();
         return;
       default:
@@ -3769,10 +3904,10 @@ function openCropThumbnailModal(itemNo = null) {
       if (isResizingCrop) {
         const dx = (e.clientX - startX) / cropScale;
         const dy = (e.clientY - startY) / cropScale;
-        
+
         let newW = Math.round(startW + dx);
         let newH = Math.round(startH + dy);
-        
+
         // Respect min size and bounds
         newW = Math.max(10, Math.min(newW, cropImg.naturalWidth - cropX));
         newH = Math.max(10, Math.min(newH, cropImg.naturalHeight - cropY));
@@ -3782,7 +3917,10 @@ function openCropThumbnailModal(itemNo = null) {
           // In 1:1 lock, use the larger of the two deltas to feel natural
           const side = Math.max(newW, newH);
           // Re-clamp for square
-          const maxSide = Math.min(cropImg.naturalWidth - cropX, cropImg.naturalHeight - cropY);
+          const maxSide = Math.min(
+            cropImg.naturalWidth - cropX,
+            cropImg.naturalHeight - cropY,
+          );
           newW = Math.min(side, maxSide);
           newH = newW;
         }
@@ -3831,15 +3969,15 @@ function updateCropFrameSize() {
     // If called from a manual input change, we might need to sync
     // This part handles the "height follows width" requirement
     if (document.activeElement === wInput || isResizingCrop) {
-       h = w;
-       hInput.value = h;
+      h = w;
+      hInput.value = h;
     } else if (document.activeElement === hInput) {
-       w = h;
-       wInput.value = w;
+      w = h;
+      wInput.value = w;
     } else {
-       // Fallback for programmatic calls
-       h = w;
-       hInput.value = h;
+      // Fallback for programmatic calls
+      h = w;
+      hInput.value = h;
     }
   }
 
@@ -4012,10 +4150,10 @@ async function commitPartReorder() {
 
     // Capture existing suffix from old name
     const match = oldName.match(/^(\d+)-(\d+)(?:-(.*))?$/);
-    const suffix = (match && match[3]) ? `-${match[3]}` : "";
+    const suffix = match && match[3] ? `-${match[3]}` : "";
 
     const newName = `${newX}-${newY}${suffix}`;
-    
+
     // We only send renames if the name actually changes
     if (oldName !== newName) {
       renames.push({ old: oldName, new: newName });
@@ -4026,15 +4164,15 @@ async function commitPartReorder() {
 
   try {
     showGlobalLoading("Đang lưu thứ tự mới...");
-    
+
     // We also need to update characterLayers locally if any currently selected parts are being renamed
     // so that preservation logic in loadKitStructure works.
-    Object.keys(characterLayers).forEach(idx => {
-       const layer = characterLayers[idx];
-       const r = renames.find(ren => ren.old === layer.folderName);
-       if (r) {
-          layer.folderName = r.new;
-       }
+    Object.keys(characterLayers).forEach((idx) => {
+      const layer = characterLayers[idx];
+      const r = renames.find((ren) => ren.old === layer.folderName);
+      if (r) {
+        layer.folderName = r.new;
+      }
     });
 
     const response = await fetch("/api/reorder_parts", {
@@ -4063,3 +4201,22 @@ async function commitPartReorder() {
     hideGlobalLoading();
   }
 }
+
+// --- Instruction Modal ---
+function showInstructions() {
+  const modal = document.getElementById("instruction-modal-overlay");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeInstructionModal() {
+  const modal = document.getElementById("instruction-modal-overlay");
+  if (modal) modal.style.display = "none";
+}
+
+// Close modal when clicking outside
+window.addEventListener("click", (event) => {
+  const instructionModal = document.getElementById("instruction-modal-overlay");
+  if (event.target === instructionModal) {
+    closeInstructionModal();
+  }
+});

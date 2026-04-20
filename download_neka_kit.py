@@ -200,7 +200,7 @@ def get_clean_data_via_browser(url, output_file):
     if not webdriver:
         return None
 
-    pass # Launching browser
+    print(f"[*] Đang khởi động trình duyệt để lấy dữ liệu từ: {url}")
     
     chrome_options = Options()
     # Run in headless mode to avoid popup
@@ -212,9 +212,14 @@ def get_clean_data_via_browser(url, output_file):
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
     try:
+        print("[*] Đang kiểm tra/tải Chrome Driver (có thể mất vài giây)...")
         service = Service(ChromeDriverManager().install())
+        print("[*] Khởi động Chrome...")
         driver = webdriver.Chrome(service=service, options=chrome_options)
+        # Set page load timeout
+        driver.set_page_load_timeout(30)
     except Exception as e:
+        print(f"[!] Lỗi khi khởi động trình duyệt: {e}")
         return None
     
     try:
@@ -245,11 +250,13 @@ def get_clean_data_via_browser(url, output_file):
                                 json.dump(final_data, f, ensure_ascii=False, indent=2)
                             return output_file
             except Exception as e:
+                print(f"[!] Lỗi khi xử lý dữ liệu kit: {e}")
                 pass
 
         return None
         
     except Exception as e:
+        print(f"[!] Lỗi trình duyệt: {e}")
         try: driver.quit()
         except: pass
         return None
@@ -487,7 +494,9 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
         nav_position = part_idx + 1  # Y index
         
         # Report progress
-        update_progress(part_idx + 1, len(parts), f"Đang xử lý phần: {part.get('name', 'Part ' + str(nav_position))}")
+        part_name = part.get('name', 'Phần ' + str(nav_position))
+        print(f"[*] [{part_idx + 1}/{len(parts)}] Đang xử lý: {part_name}")
+        update_progress(part_idx + 1, len(parts), f"Đang xử lý phần: {part_name}")
 
         if selected_y is not None and nav_position not in selected_y:
             continue
@@ -740,6 +749,7 @@ def reorganize_kit(metadata_path, selected_y=None, kit_id=None):
 
 
     update_progress(len(parts), len(parts), "Hoàn tất!")
+    print(f"\n[√] TẢI XONG! Tổng cộng đã tải {total_files} file.")
 
 
 # ============= MAIN =============
@@ -755,13 +765,14 @@ if __name__ == "__main__":
     else:
         url = f"https://www.neka.cc/composer/{arg}"
     
-    pass # Processing URL
+    print(f"[*] Bắt đầu tải kit ID: {arg}")
     
     # Step 1: Download metadata
     temp_json = "temp_kit_data.json"
     metadata_file = get_clean_data_via_browser(url, temp_json)
     
     if not metadata_file:
+        print("[!] Không thể lấy được thông tin kit. Vui lòng kiểm tra lại ID hoặc kết nối mạng.")
         sys.exit(1)
     
     # Step 2: Read metadata to get kit name and ID
@@ -782,11 +793,37 @@ if __name__ == "__main__":
         except:
             pass
 
+    # Step 3.1: Validate output directory immediately
+    if not os.path.exists(output_base):
+        try:
+            print(f"[*] Thư mục gốc không tồn tại, đang tạo: {output_base}")
+            os.makedirs(output_base, exist_ok=True)
+        except Exception as e:
+            print(f"[!] Lỗi: Không thể truy cập hoặc tạo thư mục gốc {output_base}.")
+            print(f"    Chi tiết: {e}")
+            sys.exit(1)
+            
+    # Test write permission
+    try:
+        test_file = os.path.join(output_base, ".write_test")
+        with open(test_file, 'w') as f:
+            f.write("test")
+        os.remove(test_file)
+    except Exception as e:
+        print(f"[!] Lỗi: Bạn không có quyền ghi vào thư mục: {output_base}")
+        print(f"    Vui lòng kiểm tra lại quyền truy cập network hoặc đường dẫn.")
+        sys.exit(1)
+
     # Use ID-only naming to avoid Chinese characters in folder names
     base_dir = os.path.join(output_base, f"neka_{kit_id}")
 
     if not os.path.exists(base_dir):
-        os.makedirs(base_dir)
+        print(f"[*] Tạo thư mục lưu trữ: {base_dir}")
+        try:
+            os.makedirs(base_dir, exist_ok=True)
+        except Exception as e:
+            print(f"[!] Không thể tạo thư mục {base_dir}: {e}")
+            sys.exit(1)
     
     final_metadata_path = os.path.join(base_dir, "metadata.json")
     shutil.move(temp_json, final_metadata_path)
@@ -821,4 +858,5 @@ if __name__ == "__main__":
                 selected_y = None
 
     reorganize_kit(final_metadata_path, selected_y=selected_y, kit_id=kit_id)
+    print(f"[√] Dữ liệu đã được lưu tại: {base_dir}")
 

@@ -1,6 +1,8 @@
 Tải tất cả: python download_neka_kit.py [ID]
 Tải chọn lọc: python download_neka_kit.py [ID] --y
+Nếu muốn đổi thư mục lưu, có thể dùng flag --out:
 
+python download_neka_kit.py 13819 --out "D:\your\custom\path"
 // nạp data
 // python generate_kits_list.py /1/19/2026 bỏ
 

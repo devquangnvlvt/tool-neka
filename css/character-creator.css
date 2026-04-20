@@ -1226,3 +1226,26 @@ body {
 .btn-green:hover { background: #2ecc71; }
 .debug-input { border: 1px solid #ddd; outline: none; }
 .debug-input:focus { border-color: #3498db; }
+
+/* Instruction Modal Content Styles */
+.instruction-content h4 {
+  font-size: 16px;
+  font-weight: 700;
+  border-left: 4px solid #667eea;
+  padding-left: 10px;
+  margin-top: 15px;
+}
+
+.instruction-content ul li {
+  list-style-type: disc;
+  margin-left: 5px;
+  color: #555;
+}
+
+.text-primary {
+  color: #667eea !important;
+}
+
+.p-l-20 {
+  padding-left: 20px;
+}

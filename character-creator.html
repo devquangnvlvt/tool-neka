@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Đì Đai Đơ - Trâm CMC</title>
+  <title>TRÂM CMC</title>
   <link rel="stylesheet" href="css/character-creator.css">
   <link rel="icon" type="image/x-icon" href="img/icon.ico">
 </head>
@@ -15,6 +15,7 @@
       <div style="display: flex; gap: 50px; align-items: center; ">
         <h6><a id="link-picrew" href="http://192.168.1.193:3000/" target="_blank">TẢI DATA PICREW</a></h6>
         <h6><a id="link-neka" href="http://192.168.1.193:8000/" target="_blank">TẢI DATA NEKA</a></h6>
+        <p><a href="javascript:void(0)" onclick="showInstructions()">Hướng dẫn</a></p>
       </div>
       <div class="kit-selector-area">
         <div class="flex-between m-b-5">
@@ -54,10 +55,10 @@
         <canvas id="character-canvas" width="400" height="400"></canvas>
         <div class="controls">
           <button class="btn btn-secondary" onclick="randomizeCharacter()">
-            Random
+            Random (z)
           </button>
           <button class="btn btn-secondary btn-red" onclick="resetAllLayers()">
-            Reset
+            Reset (x)
           </button>
         </div>
         <div id="structure-warnings" class="warning-box p-10 m-b-10 font-13"></div>
@@ -103,9 +104,10 @@
             <div>
               <button class="btn btn-blue btn-small" onclick="autoCreateThumbs()">
                 Tạo Thumb toàn bộ
+                (c)
               </button>
               <button class="btn btn-red btn-small m-l-5" onclick="deleteAllThumbs()">
-                Xóa Thumb toàn bộ
+                Xóa Thumb toàn bộ (v)
               </button>
             </div>
           </div>
@@ -137,10 +139,10 @@
                 Xóa Thumb
               </button>
               <button id="create-part-nav-btn" class="btn btn-indigo btn-small " onclick="createPartNav()">
-                Tạo Nav
+                Tạo Nav (T)
               </button>
               <button id="delete-part-btn" class="btn btn-coral btn-small " onclick="promptDeletePart()">
-                Xóa layer
+                Xóa layer (A)
               </button>
             </div>
           </div>
@@ -466,6 +468,41 @@
         <div class="flex-justify-end flex-gap-10">
           <button class="btn btn-secondary" onclick="closeRenameModal()">Hủy</button>
           <button class="btn btn-green" onclick="confirmRenameModal()">Xác nhận</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instruction Modal -->
+  <div id="instruction-modal-overlay" class="modal-overlay">
+    <div class="modal-content modal-custom-medium">
+      <div class="merge-header">
+        <h2>Hướng dẫn</h2>
+        <button class="btn btn-secondary" onclick="closeInstructionModal()">✖</button>
+      </div>
+      <div class="p-20 overflow-y-auto" style="max-height: 70vh;background: white;">
+        <div class="instruction-content">
+          <section class="m-b-20">
+            <h4 class="m-b-10" style="color: #667eea;">Phím tắt</h4>
+            <p><b>1</b>: Phần chọn bộ phận</p>
+            <p><b>2</b>: Phần chọn item</p>
+            <p><b>3</b>: Phần chọn màu </p>
+            <p><b>Z</b>: Random</p>
+            <p><b>X</b>: Reset</p>
+            <p><b>C</b>: Tạo thumbnail toàn bộ</p>
+            <p><b>V</b>:Xóa thumbnail toàn độ</p>
+            <p><b>F</b>:Xóa màu đã chọn</p>
+            <p><b>D</b>:Chọn màu </p>
+            <p><b>Q</b>:Fix toàn bộ màu </p>
+            <p><b>W</b>:Sắp xếp ảnh 1->n </p>
+            <p><b>E</b>:Fix theo điểm </p>
+            <p><b>R</b>:Xóa màu không chọn</p>
+            <p><b>T</b>:Tạo Nav </p>
+            <p><b>A</b>:Xóa layer</p>
+          </section>
+          <div class="info-box p-15 m-t-20">
+            <p class="font-13" style="color: #1976d2;">Thắc mắc gì hỏi: <b>Trâm cmc</b></p>
+          </div>
         </div>
       </div>
     </div>
