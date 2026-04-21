@@ -1017,18 +1017,24 @@ async function loadColors(part) {
   const colors = part.colors.length > 0 ? part.colors : ["default"];
   let hasDuplicates = false;
 
-  // Check for duplicates before rendering
+  // Real Hex Comparison Check
+  const hexCounts = {};
   colors.forEach((cf) => {
-    if (cf.includes("_") && !cf.startsWith("default")) {
-      // Check if it's a numeric suffix like _2, _3
-      if (cf.match(/_[0-9]+$/)) hasDuplicates = true;
-    }
+    if (cf === "default") return;
+    const hex = getColorHex(cf).toUpperCase();
+    hexCounts[hex] = (hexCounts[hex] || 0) + 1;
+  });
+
+  // Check if any hex appears more than once
+  Object.values(hexCounts).forEach((count) => {
+    if (count > 1) hasDuplicates = true;
   });
 
   if (hasDuplicates) {
     const warning = document.createElement("div");
     warning.id = "duplicate-color-warning";
-    warning.innerHTML = " <span>Phát hiện mã màu trùng lặp</span>";
+    warning.innerHTML =
+      " <span>Phát hiện mã màu trùng lặp trong bộ phận này</span>";
     colorGrid.appendChild(warning);
   }
 
@@ -1065,10 +1071,11 @@ async function loadColors(part) {
     const colorDiv = document.createElement("div");
     colorDiv.className = "color-option";
 
-    // Check if this specific folder is a duplicate
-    if (colorFolder.match(/_[0-9]+$/)) {
+    // Check if this specific folder is a duplicate (by Hex)
+    const currentHex = getColorHex(colorFolder).toUpperCase();
+    if (colorFolder !== "default" && hexCounts[currentHex] > 1) {
       colorDiv.classList.add("duplicate-color");
-      colorDiv.title = `MÀU TRÙNG LẶP: ${colorFolder}`;
+      colorDiv.title = `MÀU TRÙNG MÃ: #${currentHex} (${colorFolder})`;
     }
 
     // Check for missing images in this color
