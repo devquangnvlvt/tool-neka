@@ -1032,6 +1032,35 @@ async function loadColors(part) {
     colorGrid.appendChild(warning);
   }
 
+  // Check for missing images (Consistency Check)
+  // Base maxItems on the actual maximum count found in the color folders
+  const counts = Object.values(part.color_image_counts || {});
+  // Include root items count but only if it's based on actual images,
+  // part.items_count might include metadata, so we might want to be careful.
+  // However, for most kits, the root folder is the "default" color source.
+  let maxItems =
+    counts.length > 0 ? Math.max(...counts) : part.items_count || 0;
+
+  let hasMissingImages = false;
+  const missingColorsList = [];
+
+  if (maxItems > 0 && part.color_image_counts) {
+    Object.entries(part.color_image_counts).forEach(([cf, count]) => {
+      if (count < maxItems) {
+        hasMissingImages = true;
+        missingColorsList.push({ name: cf, count: count });
+      }
+    });
+  }
+
+  if (hasMissingImages) {
+    const missingWarning = document.createElement("div");
+    missingWarning.id = "missing-images-warning";
+    missingWarning.className = "warning-banner";
+    missingWarning.innerHTML = ` <span>Phát hiện ${missingColorsList.length} màu bị thiếu ảnh (chuẩn là ${maxItems} ảnh)</span>`;
+    colorGrid.appendChild(missingWarning);
+  }
+
   colors.forEach((colorFolder, index) => {
     const colorDiv = document.createElement("div");
     colorDiv.className = "color-option";
@@ -1040,6 +1069,22 @@ async function loadColors(part) {
     if (colorFolder.match(/_[0-9]+$/)) {
       colorDiv.classList.add("duplicate-color");
       colorDiv.title = `MÀU TRÙNG LẶP: ${colorFolder}`;
+    }
+
+    // Check for missing images in this color
+    const itemCount = part.color_image_counts
+      ? part.color_image_counts[colorFolder] || 0
+      : colorFolder === "default"
+        ? part.items_count
+        : 0;
+    const isMissing = itemCount < maxItems;
+
+    if (isMissing && colorFolder !== "default") {
+      colorDiv.classList.add("missing-items");
+      const badge = document.createElement("div");
+      badge.className = "missing-badge";
+      badge.textContent = `${itemCount}/${maxItems}`;
+      colorDiv.appendChild(badge);
     }
 
     colorDiv.dataset.colorIndex = index;
