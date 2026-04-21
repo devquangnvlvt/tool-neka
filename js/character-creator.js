@@ -1015,17 +1015,42 @@ async function loadColors(part) {
   editFolderColor.appendChild(controlsDiv);
 
   const colors = part.colors.length > 0 ? part.colors : ["default"];
+  let hasDuplicates = false;
+
+  // Check for duplicates before rendering
+  colors.forEach((cf) => {
+    if (cf.includes("_") && !cf.startsWith("default")) {
+      // Check if it's a numeric suffix like _2, _3
+      if (cf.match(/_[0-9]+$/)) hasDuplicates = true;
+    }
+  });
+
+  if (hasDuplicates) {
+    const warning = document.createElement("div");
+    warning.id = "duplicate-color-warning";
+    warning.innerHTML = " <span>Phát hiện mã màu trùng lặp</span>";
+    colorGrid.appendChild(warning);
+  }
 
   colors.forEach((colorFolder, index) => {
     const colorDiv = document.createElement("div");
     colorDiv.className = "color-option";
+
+    // Check if this specific folder is a duplicate
+    if (colorFolder.match(/_[0-9]+$/)) {
+      colorDiv.classList.add("duplicate-color");
+      colorDiv.title = `MÀU TRÙNG LẶP: ${colorFolder}`;
+    }
+
     colorDiv.dataset.colorIndex = index;
     colorDiv.dataset.colorFolder = colorFolder;
 
     const hexColor = getColorHex(colorFolder);
     colorDiv.style.background = `#${hexColor}`;
-    colorDiv.title =
-      colorFolder === "default" ? "Màu mặc định" : `#${hexColor}`;
+    if (!colorDiv.classList.contains("duplicate-color")) {
+      colorDiv.title =
+        colorFolder === "default" ? "Màu mặc định" : `#${hexColor}`;
+    }
 
     if (colorFolder === "default") {
       colorDiv.classList.add("default-color");
@@ -1875,7 +1900,6 @@ function resetCharacter() {
 
 // Reset all layers (select None for all parts)
 function resetAllLayers() {
-  
   characterLayers = {};
   if (kitStructure) {
     kitStructure.forEach((part, index) => {
@@ -1893,7 +1917,7 @@ function resetAllLayers() {
 
   // Update UI
   if (currentPart) selectPart(currentPart.index, currentPart.part);
-  
+
   // Update UI to show all items as "None"
   document.querySelectorAll(".item-option").forEach((item) => {
     item.classList.remove("active");
