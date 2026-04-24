@@ -491,12 +491,7 @@ body {
   animation: pulse-border 2s infinite;
 }
 
-.color-option.duplicate-color:hover {
-  transform: scale(1.2) rotate(5deg) !important;
-  border: 2px solid #ff4757 !important;
-  z-index: 10;
-  animation: shake-mini 0.3s ease-in-out infinite !important;
-}
+
 
 @keyframes pulse-border {
   0% { border-color: #ff4757; }
@@ -622,11 +617,7 @@ body {
   animation: pulse-border 2s infinite;
 }
 
-.color-option.duplicate-color:hover {
-  transform: scale(2) rotate(8deg) !important;
-  border: 2px solid #ff4757 !important;
-  animation: shake-mini 0.3s infinite !important;
-}
+
 
 @keyframes pulse-border {
   0%, 100% { border-color: #ff4757; transform: scale(1); }
