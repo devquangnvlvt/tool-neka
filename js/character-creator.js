@@ -1008,6 +1008,7 @@ async function loadColors(part) {
                     <button id="fix-colors-by-point-btn" onclick="openColorPickerModal()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #2ecc71; color: white; border: none; border-radius: 4px;" title="Chọn 1 điểm trên ảnh để tự động sửa mã màu cho TOÀN BỘ folder màu khác">Fix theo điểm (E)</button>
                     <button id="rename-color-btn" onclick="renameCurrentColor()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 4px;">Đổi tên folder</button>
                     <button id="fix-color-btn" onclick="fixCurrentColorCode()" style="display:none; padding: 5px 10px; font-size: 11px; cursor: pointer; background: #9b59b6; color: white; border: none; border-radius: 4px; opacity: 0.8;" title="Tự động sửa tên folder của màu đang chọn">Fix màu này</button>
+                    <button id="deselect-colors-btn" onclick="deselectAllColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #7f8c8d; color: white; border: none; border-radius: 4px;" title="Bỏ chọn tất cả checkbox">Bỏ chọn (Y)</button>
                     <button id="delete-unselected-colors-btn" onclick="confirmDeleteUnselectedColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #f39c12; color: white; border: none; border-radius: 4px;">Xóa màu không chọn (R)</button>
                     <button id="delete-colors-btn" onclick="confirmDeleteColors()" style="padding: 5px 10px; font-size: 11px; cursor: pointer; background: #e74c3c; color: white; border: none; border-radius: 4px;">Xóa màu đã chọn (F)</button>
                 </div>
@@ -1719,6 +1720,14 @@ async function confirmDeleteColors() {
   }
 
   await performDeleteColors(colorsToDelete);
+}
+// Bỏ chọn tất cả màu của bộ phận đang chọn
+function deselectAllColors() {
+  const allCheckboxes = document.querySelectorAll(".color-checkbox");
+  allCheckboxes.forEach((cb) => {
+    cb.checked = false;
+  });
+  updateSelectedColorCount();
 }
 
 // Xóa màu KHÔNG chọn
@@ -3567,6 +3576,11 @@ window.addEventListener("keydown", (e) => {
       case "r":
       case "R":
         confirmDeleteUnselectedColors();
+        e.preventDefault();
+        return;
+      case "y":
+      case "Y":
+        deselectAllColors();
         e.preventDefault();
         return;
       case "t":
