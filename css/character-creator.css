@@ -1307,6 +1307,22 @@ body {
   gap: 15px;
 }
 
+.file-debug-group {
+  transition: all 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.file-debug-group:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.file-debug-group.selected {
+  background: rgba(52, 152, 219, 0.2) !important;
+  border: 1px solid #3498db !important;
+  box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+}
+
 .color-picker-input {
   width: 60px;
   height: 30px;

@@ -431,6 +431,9 @@
           </div>
           <button class="btn btn-red" onclick="batchDeleteAndReorder()">Xóa
             & Sắp xếp lại</button>
+          <button id="delete-selected-btn" class="btn btn-red" onclick="deleteSelectedImages()" style="display:none; background:#c0392b;">
+            Xóa các ảnh đã chọn (<span id="selected-count">0</span>)
+          </button>
         </div>
       </div>
       <p id="file-debug-subtitle" class="text-muted m-b-20">

@@ -14,7 +14,38 @@ import traceback
 from urllib.parse import urlparse, parse_qs
 from PIL import Image, ImageEnhance
 import numpy as np
-from config import DATA_DIR
+from config import DATA_DIR, TRASH_DIR
+import time
+
+def move_to_trash(path, kit_folder=None, part_folder=None):
+    """Moves a file or directory to the trash folder with a timestamp and context info."""
+    if not os.path.exists(path):
+        return
+    
+    if not os.path.exists(TRASH_DIR):
+        os.makedirs(TRASH_DIR)
+        
+    base_name = os.path.basename(path)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    
+    # Build a descriptive name
+    name_parts = [timestamp]
+    if kit_folder:
+        # Replace separators with underscores for filename safety
+        clean_kit = str(kit_folder).replace('\\', '_').replace('/', '_')
+        name_parts.append(clean_kit)
+    if part_folder and part_folder != base_name:
+        name_parts.append(str(part_folder))
+    name_parts.append(base_name)
+    
+    trash_name = "_".join(name_parts)
+    trash_path = os.path.join(TRASH_DIR, trash_name)
+    
+    try:
+        shutil.move(path, trash_path)
+        print(f"DEBUG: Moved to trash: {path} -> {trash_path}")
+    except Exception as e:
+        print(f"ERROR: Failed to move to trash: {e}")
 from delete_neka_part import delete_part
 from zip_neka_kit import zip_kit
 
@@ -928,7 +959,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_api_response(False, "File not found")
                 return
 
-            os.remove(target_path)
+            move_to_trash(target_path, kit_folder=kit_folder, part_folder=folder_name)
             self.send_api_response(True, f"Deleted {filename}")
 
         except Exception as e:
@@ -1182,27 +1213,27 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         try:
                             p = os.path.join(src, fn)
                             if os.path.exists(p):
-                                os.remove(p)
+                                move_to_trash(p, kit_folder=kit_folder, part_folder=folder_name)
                             if is_default_color:
                                 match = re.match(r"^(\d+)\.png$", fn)
                                 if match:
                                     tid = match.group(1)
                                     tp = os.path.join(src, f"thumb_{tid}.png")
                                     if os.path.exists(tp):
-                                        os.remove(tp)
+                                        move_to_trash(tp, kit_folder=kit_folder, part_folder=folder_name)
                         except Exception as e:
                             print(f"[Merge] Warning: Could not delete {fn}: {e}")
                     
                     final_path = os.path.join(src, f"{target_fn}.png")
                     if os.path.exists(final_path):
-                        try: os.remove(final_path)
+                        try: move_to_trash(final_path, kit_folder=kit_folder, part_folder=folder_name)
                         except: pass
                     
                     try:
                         os.rename(temp_path, final_path)
                     except Exception as e:
                         shutil.copy2(temp_path, final_path)
-                        os.remove(temp_path)
+                        move_to_trash(temp_path, kit_folder=kit_folder, part_folder=folder_name)
 
                     if is_default_color:
                         try:
@@ -1312,17 +1343,19 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     for fn in files_to_stack:
                         try:
                             p = os.path.join(src, fn)
-                            if os.path.exists(p): os.remove(p)
+                            if os.path.exists(p): move_to_trash(p, kit_folder=kit_folder, part_folder=folder_name)
                             if is_default_color:
                                 match = re.match(r"^(\d+)\.png$", fn)
                                 if match:
                                     tp = os.path.join(src, f"thumb_{match.group(1)}.png")
-                                    if os.path.exists(tp): os.remove(tp)
+                                    if os.path.exists(tp): move_to_trash(tp, kit_folder=kit_folder, part_folder=folder_name)
                         except: pass
                     final_path = os.path.join(src, f"{target_fn}.png")
-                    if os.path.exists(final_path): os.remove(final_path)
+                    if os.path.exists(final_path):
+                        try: move_to_trash(final_path, kit_folder=kit_folder, part_folder=folder_name)
+                        except: pass
                     try: os.rename(temp_path, final_path)
-                    except: shutil.copy2(temp_path, final_path); os.remove(temp_path)
+                    except: shutil.copy2(temp_path, final_path); move_to_trash(temp_path, kit_folder=kit_folder, part_folder=folder_name)
                     if is_default_color:
                         thumb = img.copy(); thumb.thumbnail((200, 200)); thumb.save(os.path.join(src, f"thumb_{target_fn}.png"))
                     return True
@@ -2105,7 +2138,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 color_path = safe_join(struct_base, color)
                 if os.path.exists(color_path) and os.path.isdir(color_path):
                     try:
-                        shutil.rmtree(color_path)
+                        move_to_trash(color_path, kit_folder=kit_folder, part_folder=part_folder)
                         deleted_count += 1
                     except Exception as e:
                         errors.append(f"Could not delete {color}: {str(e)}")
@@ -2422,7 +2455,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     if m_img:
                         idx = int(m_img.group(1))
                         if idx in to_delete:
-                            try: os.remove(os.path.join(target_dir, entry))
+                            try: move_to_trash(os.path.join(target_dir, entry), kit_folder=kit_folder, part_folder=folder_name)
                             except: pass
                     
                     if is_root:
@@ -2430,25 +2463,25 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                         if m_thumb:
                             idx = int(m_thumb.group(1))
                             if idx in to_delete:
-                                try: os.remove(os.path.join(target_dir, entry))
+                                try: move_to_trash(os.path.join(target_dir, entry), kit_folder=kit_folder, part_folder=folder_name)
                                 except: pass
 
                 # 2. Reorder remaining files
                 # Collect remaining number images
-                remaining_images = []
+                remaining_files = [] # List of (index, extension)
                 for entry in os.listdir(target_dir):
                     m = image_pattern.match(entry)
                     if m:
-                        remaining_images.append(int(m.group(1)))
+                        remaining_files.append((int(m.group(1)), m.group(2).lower()))
                 
-                remaining_images.sort()
+                remaining_files.sort(key=lambda x: x[0])
                 
-                # Rename them to 1.png, 2.png...
-                for new_idx, old_idx in enumerate(remaining_images, 1):
+                # Rename them to 1.ext, 2.ext...
+                for new_idx, (old_idx, ext) in enumerate(remaining_files, 1):
                     if new_idx == old_idx: continue # Already correct
                     
-                    old_img_name = f"{old_idx}.png"
-                    new_img_name = f"{new_idx}.png"
+                    old_img_name = f"{old_idx}.{ext}"
+                    new_img_name = f"{new_idx}.{ext}"
                     
                     try:
                         os.rename(os.path.join(target_dir, old_img_name), 
@@ -2458,13 +2491,15 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     
                     # Also reorder thumbs if in root
                     if is_root:
-                        old_thumb_name = f"thumb_{old_idx}.png"
-                        new_thumb_name = f"thumb_{new_idx}.png"
-                        if os.path.exists(os.path.join(target_dir, old_thumb_name)):
-                            try:
-                                os.rename(os.path.join(target_dir, old_thumb_name), 
-                                          os.path.join(target_dir, new_thumb_name))
-                            except: pass
+                        # Check for thumb with any image extension
+                        for t_ext in ["png", "webp"]:
+                            old_thumb_name = f"thumb_{old_idx}.{t_ext}"
+                            new_thumb_name = f"thumb_{new_idx}.{t_ext}"
+                            if os.path.exists(os.path.join(target_dir, old_thumb_name)):
+                                try:
+                                    os.rename(os.path.join(target_dir, old_thumb_name), 
+                                              os.path.join(target_dir, new_thumb_name))
+                                except: pass
                 
                 processed_dirs += 1
 

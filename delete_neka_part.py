@@ -4,7 +4,37 @@ import sys
 import shutil
 import re
 import time
-from config import DATA_DIR
+from config import DATA_DIR, TRASH_DIR
+
+def move_to_trash(path, kit_folder=None, part_folder=None):
+    """Moves a file or directory to the trash folder with a timestamp and context info."""
+    if not os.path.exists(path):
+        return
+    
+    if not os.path.exists(TRASH_DIR):
+        os.makedirs(TRASH_DIR)
+        
+    base_name = os.path.basename(path)
+    timestamp = time.strftime("%Y%m%d-%H%M%S")
+    
+    # Build a descriptive name
+    name_parts = [timestamp]
+    if kit_folder:
+        # Replace separators with underscores for filename safety
+        clean_kit = kit_folder.replace('\\', '_').replace('/', '_')
+        name_parts.append(clean_kit)
+    if part_folder and part_folder != base_name:
+        name_parts.append(part_folder)
+    name_parts.append(base_name)
+    
+    trash_name = "_".join(name_parts)
+    trash_path = os.path.join(TRASH_DIR, trash_name)
+    
+    try:
+        shutil.move(path, trash_path)
+        print(f"DEBUG: Moved to trash: {path} -> {trash_path}")
+    except Exception as e:
+        print(f"ERROR: Failed to move to trash: {e}")
 
 
 def delete_part(kit_folder, part_y):
@@ -58,8 +88,8 @@ def delete_part(kit_folder, part_y):
                         folder_path = os.path.join(structured_dir, entry)
                         print(f"DEBUG: MATCH FOUND! folder: {entry} (target_x: {target_x})")
                         if os.path.isdir(folder_path):
-                            # Use handle_remove_readonly to force delete read-only files
-                            shutil.rmtree(folder_path, ignore_errors=False, onerror=handle_remove_readonly)
+                            # Use move_to_trash with context
+                            move_to_trash(folder_path, kit_folder=kit_folder, part_folder=entry)
             
             if target_x is None:
                 print(f"DEBUG: Failed to find any folder with Y={part_y} in {structured_dir}")
@@ -100,9 +130,9 @@ def delete_part(kit_folder, part_y):
                         try:
                             if os.path.exists(new_path):
                                 if os.path.isdir(new_path):
-                                    shutil.rmtree(new_path, ignore_errors=False, onerror=handle_remove_readonly)
+                                    move_to_trash(new_path, kit_folder=kit_folder)
                                 else:
-                                    os.remove(new_path)
+                                    move_to_trash(new_path, kit_folder=kit_folder)
                                 time.sleep(0.3)
                             
                             print(f"DEBUG: Renaming {info['name']} -> {new_name}")

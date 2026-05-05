@@ -17,6 +17,7 @@ let imgVers = Date.now();
 let showColorThumb = false; // Toggle: hiển thị thumb theo màu
 let partSortType = "y"; // 'x' or 'y'
 let currentZFilter = "all"; // 'all', '1', '2'
+let debugSelectedIds = new Set();
 
 let restoredActivePartFolder = null;
 let allKits = [];
@@ -2155,6 +2156,8 @@ async function showFolderFiles() {
 
   modal.style.display = "flex";
   grid.innerHTML = "";
+  debugSelectedIds.clear();
+  updateDebugSelectionUI();
   subtitle.textContent = `Đang tải danh sách file cho part: ${currentPart.part.name} (${currentPart.part.folder})...`;
 
   try {
@@ -2289,6 +2292,12 @@ async function showFolderFiles() {
         container.style.cssText =
           "padding: 10px; border-radius: 8px; display: flex; flex-direction: row; align-items: center; justify-content: space-around; gap: 10px;";
 
+        container.onclick = (e) => {
+          if (id !== "nav") {
+            toggleDebugSelection(id, e);
+          }
+        };
+
         // Main Slot
         if (group.main) {
           container.innerHTML += `
@@ -2379,6 +2388,120 @@ async function showFolderFiles() {
   } catch (error) {
     console.error(error);
     subtitle.textContent = "Lỗi kết nối server";
+  }
+}
+
+let lastDebugSelectedId = null;
+
+function toggleDebugSelection(id, event) {
+  // Get all IDs in the current visual order to handle ranges
+  const groups = Array.from(document.querySelectorAll(".file-debug-group"));
+  const idsInOrder = groups
+    .map((g) => g.dataset.id)
+    .filter((did) => did && did !== "nav");
+
+  if (event.shiftKey && lastDebugSelectedId !== null) {
+    const start = idsInOrder.indexOf(lastDebugSelectedId);
+    const end = idsInOrder.indexOf(id);
+
+    if (start !== -1 && end !== -1) {
+      const low = Math.min(start, end);
+      const high = Math.max(start, end);
+      // Select everything in the range
+      for (let i = low; i <= high; i++) {
+        debugSelectedIds.add(idsInOrder[i]);
+      }
+    }
+  } else if (event.ctrlKey) {
+    // Toggle individual
+    if (debugSelectedIds.has(id)) {
+      debugSelectedIds.delete(id);
+    } else {
+      debugSelectedIds.add(id);
+    }
+  } else {
+    // Single click: clear and select
+    debugSelectedIds.clear();
+    debugSelectedIds.add(id);
+  }
+
+  lastDebugSelectedId = id;
+  updateDebugSelectionUI();
+}
+
+function updateDebugSelectionUI() {
+  const groups = document.querySelectorAll(".file-debug-group");
+  groups.forEach((group) => {
+    const id = group.dataset.id;
+    if (debugSelectedIds.has(id)) {
+      group.classList.add("selected");
+    } else {
+      group.classList.remove("selected");
+    }
+  });
+
+  const deleteBtn = document.getElementById("delete-selected-btn");
+  const countSpan = document.getElementById("selected-count");
+  if (deleteBtn && countSpan) {
+    if (debugSelectedIds.size > 0) {
+      deleteBtn.style.display = "block";
+      countSpan.textContent = debugSelectedIds.size;
+    } else {
+      deleteBtn.style.display = "none";
+    }
+  }
+}
+
+async function deleteSelectedImages() {
+  if (!currentPart || debugSelectedIds.size === 0) return;
+
+  const applyAllCheck = document.getElementById("batch-delete-all-check");
+  const applyAll = applyAllCheck ? applyAllCheck.checked : true;
+  const indices = Array.from(debugSelectedIds)
+    .map((id) => parseInt(id))
+    .filter((n) => !isNaN(n))
+    .sort((a, b) => a - b);
+
+  if (indices.length === 0) return;
+
+  const targetDesc = applyAll
+    ? "TẤT CẢ thư mục màu"
+    : `folder [${currentColor || "Main"}]`;
+  if (
+    !confirm(
+      `Bạn chắc chắn muốn XÓA VĨNH VIỄN ${indices.length} ảnh đã chọn trong ${targetDesc} và sắp xếp lại?\n(Các thumbnail liên quan cũng sẽ bị xóa)`,
+    )
+  )
+    return;
+
+  showLoading(`Đang xóa ${indices.length} ảnh và sắp xếp lại...`);
+
+  try {
+    const response = await fetch("/api/batch_delete_reorder", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        folder: currentPart.part.folder,
+        indices: indices,
+        apply_all: applyAll,
+        color: currentColor,
+      }),
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      debugSelectedIds.clear();
+      await showFolderFiles();
+      await loadKitStructure(true);
+      alert(result.message);
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (e) {
+    alert("Lỗi server: " + e);
+  } finally {
+    hideLoading();
   }
 }
 
