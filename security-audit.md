@@ -62,4 +62,5 @@ Kế hoạch này nhằm thực hiện một cuộc rà soát bảo mật toàn 
 
 - [ ] Chạy `python .agent/skills/vulnerability-scanner/scripts/security_scan.py .`
 - [ ] Chạy `python .agent/scripts/verify_all.py .`
-- [ ] Kiểm tra thủ công các lỗ hổng đã phát hiện.
+- [ ] # Kiểm tra thủ công các lỗ hổng đã phát hiện.
+  check nhánh main_v3
