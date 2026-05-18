@@ -2147,7 +2147,7 @@ function showCurrentItemLayers() {
 }
 
 // Show folder files debug modal
-async function showFolderFiles() {
+async function      showFolderFiles() {
   if (!currentPart) return;
 
   const modal = document.getElementById("file-debug-modal");

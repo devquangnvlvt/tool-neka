@@ -1,6 +1,6 @@
 import os
-
-# Đường dẫn thư mục dữ liệu mạng (UNC Path)
+   
+# Đường       dẫn thư mục dữ liệu mạng (UNC Path)
 # Lưu ý: Chắc chắn rằng máy tính chạy server có quyền truy cập vào đường dẫn này.
 DATA_DIR  = r"D:\web\laragon\www\tool-neka\downloads"
 TRASH_DIR = r"D:\web\laragon\www\tool-neka\downloads\thung_rac"
