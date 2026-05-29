@@ -354,12 +354,13 @@ async function loadKitStructure(preserveSelection = false) {
       canvasWidth = result.canvas_width || 1436;
       canvasHeight = result.canvas_height || 1902;
 
-      // Update main canvas aspect ratio (Base width 400px)
-      const displayWidth = 400;
-      const aspectRatio = canvasHeight / canvasWidth;
-      canvas.width = displayWidth;
-      canvas.height = displayWidth * aspectRatio;
-      canvas.style.height = displayWidth * aspectRatio + "px";
+      // Đặt kích thước thực của canvas bằng đúng kích thước ảnh gốc (độ phân giải cao)
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+
+      // Xóa các inline style để CSS quản lý hiển thị co giãn theo tỉ lệ gốc
+      canvas.style.width = "";
+      canvas.style.height = "";
 
       // Warning about duplicate X and gaps
       const warningBox = document.getElementById("structure-warnings");
