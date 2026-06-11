@@ -858,7 +858,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             target_path = safe_join(struct_base, target_file)
             
             with Image.open(source_path) as img:
-                img.thumbnail((200, 200))
+                img = img.resize((200, 200), Image.LANCZOS)
                 img.save(target_path)
             
             self.send_api_response(True, f"Created {target_file}")
@@ -1258,7 +1258,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     if is_default_color:
                         try:
                             thumb = img.copy()
-                            thumb.thumbnail((200, 200))
+                            thumb = thumb.resize((200, 200), Image.LANCZOS)
                             thumb.save(os.path.join(src, f"thumb_{target_fn}.png"))
                         except Exception as e:
                             print(f"[Merge] Error generating thumbnail: {e}")
@@ -1377,7 +1377,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                     try: os.rename(temp_path, final_path)
                     except: shutil.copy2(temp_path, final_path); move_to_trash(temp_path, kit_folder=kit_folder, part_folder=folder_name)
                     if is_default_color:
-                        thumb = img.copy(); thumb.thumbnail((200, 200)); thumb.save(os.path.join(src, f"thumb_{target_fn}.png"))
+                        thumb = img.copy(); thumb = thumb.resize((200, 200), Image.LANCZOS); thumb.save(os.path.join(src, f"thumb_{target_fn}.png"))
                     return True
                 return False
 
@@ -2249,7 +2249,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             # Use LANCZOS for high-quality down/up scaling
                             img = img.resize((std_w, std_h), Image.LANCZOS)
                         
-                        img.thumbnail((200, 200))
+                        img = img.resize((200, 200), Image.LANCZOS)
                         img.save(thumb_path)
                     folder_created += 1
                     results["created_thumbs"] += 1
@@ -2355,7 +2355,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                             box = (crop_x, crop_y, crop_x + crop_w, crop_y + crop_h)
                             cropped_img = img.crop(box)
                             # Standardize to 200x200
-                            cropped_img.thumbnail((200, 200))
+                            cropped_img = cropped_img.resize((200, 200), Image.LANCZOS)
                             # Save as thumbnail in part folder
                             cropped_img.save(target_path)
                             processed_count += 1
