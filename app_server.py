@@ -394,7 +394,26 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                 colors.append(entry_file.name)
                 except: pass
 
-                num_items = max(expected_num_items, max(image_indices) if image_indices else 0, max(item_indices) if item_indices else 0)
+                # Also scan color subfolders to get max image count
+                # (needed when root has no images/thumbs but color folders do)
+                color_max_items = 0
+                if colors and not image_indices:
+                    color_img_pattern = re.compile(r"^(\d+)\.(png|webp)$")
+                    for color_sub in colors:
+                        color_sub_path = os.path.join(entry_path, color_sub)
+                        try:
+                            with os.scandir(color_sub_path) as cit:
+                                for cf in cit:
+                                    if cf.is_file():
+                                        cm = color_img_pattern.match(cf.name)
+                                        if cm:
+                                            idx = int(cm.group(1))
+                                            if idx > color_max_items:
+                                                color_max_items = idx
+                        except Exception:
+                            pass
+
+                num_items = max(expected_num_items, max(image_indices) if image_indices else 0, max(item_indices) if item_indices else 0, color_max_items)
                 
                 missing_images = []
                 if not colors and image_indices:
