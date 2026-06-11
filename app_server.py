@@ -229,6 +229,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/fix_all_part_colors': self.handle_fix_all_part_colors,
             '/api/fix_colors_by_point': self.handle_fix_colors_by_point,
             '/api/reorder_images': self.handle_reorder_images,
+            '/api/check_missing_thumbnails': self.handle_check_missing_thumbnails,
         }
 
 
@@ -2691,6 +2692,135 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self.send_api_response(False, f"Lỗi sắp xếp ảnh: {str(e)}")
+
+    def handle_check_missing_thumbnails(self, data):
+        """Check all kits including those in parent folders from folder.json."""
+        try:
+            missing_thumbnails = []
+            total_folders = 0
+            
+            # Get specific kit if provided
+            specific_kit = data.get('kit')
+            
+            # Load parent folders from folder.json
+            parent_folders = []
+            if os.path.exists('folder.json'):
+                try:
+                    with open('folder.json', 'r', encoding='utf-8') as f:
+                        parent_folders = json.load(f)
+                except:
+                    parent_folders = []
+            
+            if not os.path.exists(DATA_DIR):
+                self.send_api_response(False, f"DATA_DIR không tồn tại: {DATA_DIR}")
+                return
+            
+            # List of all kit locations to check
+            kit_locations = []
+            
+            # First, add parent folders from folder.json (they are subfolders of DATA_DIR)
+            for parent in parent_folders:
+                parent_path = os.path.join(DATA_DIR, parent)
+                if os.path.exists(parent_path) and os.path.isdir(parent_path):
+                    kit_locations.append((parent, parent_path))
+            
+            # Then add kits directly in DATA_DIR (those not in parent folders)
+            kit_locations.append(('downloads', DATA_DIR))
+            
+            # Check all kit locations
+            for location_name, location_path in kit_locations:
+                if not os.path.exists(location_path):
+                    continue
+                
+                try:
+                    entries = os.listdir(location_path)
+                except PermissionError:
+                    continue
+                
+                for entry in sorted(entries):
+                    kit_path = os.path.join(location_path, entry)
+                    
+                    # Skip if not a directory
+                    if not os.path.isdir(kit_path) or entry.startswith('.'):
+                        continue
+                    
+                    kit_name = entry
+                    
+                    # If location is a parent folder, use it; otherwise skip default parent entries
+                    if location_name != 'downloads':
+                        pass  # Check all kits inside parent folders
+                    else:
+                        # For downloads root, skip folders that are parent folder names
+                        if kit_name in parent_folders + ['cache_blobs', 'thung_rac']:
+                            continue
+                    
+                    # If specific kit is provided, only check that kit
+                    if specific_kit and kit_name != specific_kit:
+                        continue
+                    
+                    # Get list of subfolders (parts)
+                    subfolders = []
+                    try:
+                        for item in os.listdir(kit_path):
+                            item_path = os.path.join(kit_path, item)
+                            if os.path.isdir(item_path) and not item.startswith('.'):
+                                # Only get folders with format "number-number" (e.g., 1-9, 10-5)
+                                if '-' in item:
+                                    subfolders.append(item)
+                    except PermissionError:
+                        continue
+                    
+                    if not subfolders:
+                        continue
+                    
+                    kit_missing = []
+                    for subfolder in subfolders:
+                        subfolder_path = os.path.join(kit_path, subfolder)
+                        total_folders += 1
+                        
+                        # Check if thumb_*.png exists
+                        has_thumbnail = False
+                        try:
+                            files = os.listdir(subfolder_path)
+                            for f in files:
+                                if f.startswith('thumb_') and f.endswith('.png'):
+                                    has_thumbnail = True
+                                    break
+                        except PermissionError:
+                            continue
+                        
+                        if not has_thumbnail:
+                            kit_missing.append(subfolder)
+                            missing_thumbnails.append({
+                                'kit': kit_name,
+                                'folder': subfolder,
+                                'parent': location_name,
+                                'path': subfolder_path.replace('\\', '/')
+                            })
+                    
+                    if kit_missing:
+                        print(f"⚠️  Found missing thumbnails in {location_name}/{kit_name}: {len(kit_missing)} folders", flush=True)
+            
+            # Return summary
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('X-Frame-Options', 'DENY')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.end_headers()
+            
+            response = {
+                "success": True,
+                "kit": specific_kit,
+                "total_folders_checked": total_folders,
+                "total_missing": len(missing_thumbnails),
+                "percentage_missing": round(100 * len(missing_thumbnails) / total_folders, 1) if total_folders > 0 else 0,
+                "missing_thumbnails": missing_thumbnails
+            }
+            self.wfile.write(json.dumps(response, indent=2).encode('utf-8'))
+            
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Lỗi kiểm tra thumbnail: {str(e)}")
 
 
 # ======================================================

@@ -138,6 +138,8 @@ async function loadKitsList() {
       }
 
       loadKitStructure();
+      // Check all missing thumbnails after kit structure is loaded
+      setTimeout(checkAllMissingThumbnails, 1500);
     } else {
       console.error("Error loading kits list:", result.message);
     }
@@ -242,6 +244,212 @@ async function fetchServerIP() {
   }
 }
 
+// Check for missing thumbnails from ALL kits in all parent folders
+async function checkAllMissingThumbnails() {
+  try {
+    const response = await fetch("/api/check_missing_thumbnails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}), // No specific kit - check all
+    });
+    const result = await response.json();
+
+    console.log("checkAllMissingThumbnails - API result:", result);
+    console.log("Missing items:", result.missing_thumbnails);
+
+    if (result.success && result.total_missing > 0) {
+      // Group by parent folder for display
+      const groupedByParent = {};
+      result.missing_thumbnails.forEach(item => {
+        const parentKey = item.parent || 'downloads';
+        if (!groupedByParent[parentKey]) {
+          groupedByParent[parentKey] = {};
+        }
+        if (!groupedByParent[parentKey][item.kit]) {
+          groupedByParent[parentKey][item.kit] = [];
+        }
+        groupedByParent[parentKey][item.kit].push(item.folder);
+      });
+
+      console.log("Grouped by parent:", groupedByParent);
+
+      // Create notification HTML with details grouped by parent folder
+      let detailsHTML = '';
+      Object.entries(groupedByParent).forEach(([parent, kits]) => {
+        console.log(`Adding parent: ${parent}`, kits);
+        detailsHTML += `<div style="margin: 8px 0; padding: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;">
+          <strong style="color: #ff6f00;">📁 ${parent}</strong><br>`;
+
+        Object.entries(kits).forEach(([kit, folders]) => {
+          detailsHTML += `<div style="margin-left: 10px; font-size: 11px;">
+            <strong>${kit}:</strong> ${folders.slice(0, 3).join(", ")}${folders.length > 3 ? ` ... +${folders.length - 3}` : ''}
+          </div>`;
+        });
+
+        detailsHTML += `</div>`;
+      });
+
+      const notificationHTML = `
+        <div id="thumbnail-warning-box" style="
+          background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+          border-left: 5px solid #ff9800;
+          border-radius: 8px;
+          padding: 15px;
+          margin-bottom: 15px;
+          box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+          font-family: Arial, sans-serif;
+        ">
+          <div style="font-weight: bold; color: #e65100; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">⚠️</span>
+            Phát hiện ${result.total_missing} BỘ PHẬN THIẾU THUMBNAIL (${result.percentage_missing}%)
+          </div>
+          <div style="font-size: 12px; color: #d84315; max-height: 150px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 4px;">
+            ${detailsHTML}
+          </div>
+        </div>
+      `;
+
+      // Display in thumbnail-warnings
+      const warningsDiv = document.getElementById("thumbnail-warnings");
+      if (warningsDiv) {
+        warningsDiv.innerHTML = notificationHTML;
+        warningsDiv.style.display = 'block';
+      }
+
+      console.warn(`✋ Missing thumbnails detected: ${result.total_missing} folders (${result.percentage_missing}%)`);
+    }
+  } catch (error) {
+    console.error("Error checking missing thumbnails:", error);
+  }
+}
+
+// Check for missing thumbnails and display notification
+async function checkMissingThumbnails() {
+  try {
+    const response = await fetch("/api/check_missing_thumbnails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const result = await response.json();
+
+    if (result.success && result.total_missing > 0) {
+      // Group by kit for display
+      const groupedByKit = {};
+      result.missing_thumbnails.forEach(item => {
+        if (!groupedByKit[item.kit]) {
+          groupedByKit[item.kit] = [];
+        }
+        groupedByKit[item.kit].push(item.folder);
+      });
+
+      // Create notification HTML with details
+      let detailsHTML = '';
+      Object.entries(groupedByKit).forEach(([kit, folders]) => {
+        detailsHTML += `<div style="margin: 8px 0;"><strong>${kit}:</strong> ${folders.slice(0, 5).join(", ")}${folders.length > 5 ? ` ... +${folders.length - 5} cái khác` : ''}</div>`;
+      });
+
+      const notificationHTML = `
+        <div id="thumbnail-warning-box" style="
+          background: linear-gradient(135deg, #fff3cd 0%, #ffe69c 100%);
+          border-left: 5px solid #ff9800;
+          border-radius: 8px;
+          padding: 15px;
+          margin-bottom: 15px;
+          box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+          font-family: Arial, sans-serif;
+        ">
+          <div style="font-weight: bold; color: #e65100; font-size: 14px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 18px;">⚠️</span>
+            Phát hiện ${result.total_missing} BỘ PHẬN THIẾU THUMBNAIL (${result.percentage_missing}%)
+          </div>
+          <div style="font-size: 12px; color: #d84315; max-height: 150px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 10px; border-radius: 4px;">
+            ${detailsHTML}
+            <div style="margin-top: 8px; font-size: 11px; font-style: italic; color: #666;">→ Kiểm tra file: <code>downloads/missing_thumbnails_report.json</code></div>
+          </div>
+        </div>
+      `;
+
+      // Try to display in thumbnail-warnings first
+      const warningsDiv = document.getElementById("thumbnail-warnings");
+      if (warningsDiv) {
+        warningsDiv.innerHTML = notificationHTML;
+        warningsDiv.style.display = 'block';
+      } else {
+        // Fallback: create new notification div at top
+        const container = document.querySelector('.container-full');
+        if (container) {
+          const notifDiv = document.createElement('div');
+          notifDiv.innerHTML = notificationHTML;
+          container.insertBefore(notifDiv.firstElementChild, container.firstChild);
+        }
+      }
+
+      console.warn(`✋ Missing thumbnails detected: ${result.total_missing} folders (${result.percentage_missing}%)`);
+    }
+  } catch (error) {
+    console.error("Error checking missing thumbnails:", error);
+  }
+}
+
+// Check for missing thumbnails of a specific kit
+async function checkMissingThumbnailsForKit(kitFolder) {
+  try {
+    const response = await fetch("/api/check_missing_thumbnails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kit: kitFolder }),
+    });
+    const result = await response.json();
+
+    if (result.success && result.total_missing > 0) {
+      // Display warning for this kit
+      const folders = result.missing_thumbnails.map(item => item.folder);
+      const isSingle = result.total_missing === 1;
+
+      const notificationHTML = `
+        <div id="thumbnail-warning-box-kit" style="
+          background: linear-gradient(135deg, ${isSingle ? '#fff3cd' : '#fff3cd'} 0%, ${isSingle ? '#ffe69c' : '#ffe69c'} 100%);
+          border-left: 5px solid #ff9800;
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 10px;
+          box-shadow: 0 2px 8px rgba(255, 152, 0, 0.3);
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+        ">
+          <div style="font-weight: bold; color: #e65100; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">⚠️</span>
+            <strong>${kitFolder}</strong> - Thiếu ${result.total_missing} bộ phận (${result.percentage_missing}%)
+          </div>
+          <div style="color: #d84315; max-height: 100px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px;">
+            <strong>Bộ phận thiếu:</strong> ${folders.slice(0, 10).join(", ")}${folders.length > 10 ? ` ... +${folders.length - 10} cái khác` : ''}
+          </div>
+        </div>
+      `;
+
+      // Display in thumbnail-warnings
+      const warningsDiv = document.getElementById("thumbnail-warnings");
+      if (warningsDiv) {
+        warningsDiv.innerHTML = notificationHTML;
+        warningsDiv.style.display = 'block';
+      }
+
+      const itemText = isSingle ? 'bộ phận' : 'bộ phận';
+      console.warn(`⚠️ Kit "${kitFolder}" - Thiếu ${result.total_missing} ${itemText} thumbnail (${result.percentage_missing}%)`);
+    } else {
+      // Clear warning if no missing thumbnails
+      const warningsDiv = document.getElementById("thumbnail-warnings");
+      if (warningsDiv) {
+        warningsDiv.innerHTML = '';
+        warningsDiv.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error("Error checking missing thumbnails for kit:", error);
+  }
+}
+
 // Global initialization
 document.addEventListener("DOMContentLoaded", () => {
   fetchServerIP();
@@ -333,6 +541,9 @@ function switchKit(folderName) {
   // Reset character UI
   resetCharacter();
 
+  // Check for missing thumbnails in this kit
+  checkMissingThumbnailsForKit(folderName);
+
   // Reload kit structure for new kit
   loadKitStructure().finally(() => {
     isLoadingKit = false;
@@ -354,13 +565,18 @@ async function loadKitStructure(preserveSelection = false) {
       canvasWidth = result.canvas_width || 1436;
       canvasHeight = result.canvas_height || 1902;
 
+      const displayWidth = 600;
+      const aspectRatio = canvasHeight / canvasWidth;
+      canvas.width = displayWidth;
+      canvas.height = displayWidth * aspectRatio;
+      canvas.style.height = displayWidth * aspectRatio + "px";
       // Đặt kích thước thực của canvas bằng đúng kích thước ảnh gốc (độ phân giải cao)
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+      //canvas.width = canvasWidth;
+      //canvas.height = canvasHeight;
 
       // Xóa các inline style để CSS quản lý hiển thị co giãn theo tỉ lệ gốc
-      canvas.style.width = "";
-      canvas.style.height = "";
+      //canvas.style.width = "";
+      //canvas.style.height = "";
 
       // Warning about duplicate X and gaps
       const warningBox = document.getElementById("structure-warnings");
@@ -465,6 +681,9 @@ async function loadKitStructure(preserveSelection = false) {
         preserveSelection || Object.keys(characterLayers).length > 0,
       );
       hideGlobalLoading();
+
+      // Check for missing thumbnails for the current kit
+      setTimeout(() => checkMissingThumbnailsForKit(CURRENT_KIT_FOLDER), 500);
     } else {
       hideGlobalLoading();
       console.error("Error loading kit structure:", result.message);
@@ -872,6 +1091,27 @@ async function loadItems(part) {
 
   itemGrid.innerHTML = "";
 
+  // Reset part thumbnail warning
+  const partWarning = document.getElementById("part-thumbnail-warning");
+  if (partWarning) {
+    partWarning.style.display = "none";
+    partWarning.innerHTML = "";
+  }
+
+  let loadedCount = 0;
+  let failedCount = 0;
+
+  const updatePartWarning = () => {
+    if (partWarning) {
+      if (failedCount > 0) {
+        partWarning.innerHTML = `⚠️ Phát hiện <strong>${failedCount}</strong> item thiếu thumbnail trong bộ phận này!`;
+        partWarning.style.display = "block";
+      } else {
+        partWarning.style.display = "none";
+      }
+    }
+  };
+
   // Add "None" option
   const noneDiv = document.createElement("div");
   noneDiv.className = "item-option item-none";
@@ -897,17 +1137,18 @@ async function loadItems(part) {
     const img = document.createElement("img");
 
     // Determine thumb path: trying .png then .webp
-    const itemPathBase = `${KIT_PATH}${part.folder}/${itemNum}`; // Corrected itemNumber to itemNum
+    const itemPathBase = `${KIT_PATH}${part.folder}/${itemNum}`;
     const colorItemPathBase =
       currentColor && currentColor !== "default"
-        ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}` // Corrected itemNumber to itemNum
+        ? `${KIT_PATH}${part.folder}/${currentColor}/${itemNum}`
         : null;
 
-    const thumbPathBase = `${KIT_PATH}${part.folder}/thumb_${itemNum}`; // Corrected itemNumber to itemNum
+    const thumbPathBase = `${KIT_PATH}${part.folder}/thumb_${itemNum}`;
 
     // Set initial src to .png and use onerror to fallback to .webp
     const tryLoadImage = (imgEl, base, extensions, finalFallback = null) => {
       let currentExtIdx = 0;
+      let hasReported = false;
 
       const tryNext = () => {
         if (currentExtIdx < extensions.length) {
@@ -916,7 +1157,26 @@ async function loadItems(part) {
         } else if (finalFallback) {
           finalFallback();
         } else {
-          itemDiv.style.display = "none";
+          // Failure: missing thumbnail
+          hasReported = true;
+          itemDiv.classList.add("missing-thumbnail");
+          if (!itemDiv.querySelector(".missing-thumb-label")) {
+            const label = document.createElement("div");
+            label.className = "missing-thumb-label";
+            label.textContent = "Thiếu thumb";
+            itemDiv.appendChild(label);
+          }
+          imgEl.onload = null; // Prevent onload from firing for placeholder
+          imgEl.src = "img/placeholder.png";
+          failedCount++;
+          updatePartWarning();
+        }
+      };
+
+      imgEl.onload = () => {
+        if (!hasReported) {
+          hasReported = true;
+          loadedCount++;
         }
       };
 
@@ -1668,8 +1928,8 @@ async function reorderPartImages() {
   if (
     !confirm(
       `Bạn có chắc muốn sắp xếp lại tên ảnh (từ 1 tới N) cho toàn bộ thư mục trong bộ phận "${currentPart.part.folder}"?\n` +
-        `- Sẽ tự động bỏ qua các ảnh thumbnail và nav.png.\n` +
-        `- Thao tác này sẽ thay đổi tên tệp thực tế trên server.`,
+      `- Sẽ tự động bỏ qua các ảnh thumbnail và nav.png.\n` +
+      `- Thao tác này sẽ thay đổi tên tệp thực tế trên server.`,
     )
   ) {
     return;
@@ -2143,12 +2403,12 @@ function showCurrentItemLayers() {
     return;
   }
   showLayerDetails(currentPart.part.folder, currentItem, {
-    stopPropagation: () => {},
+    stopPropagation: () => { },
   });
 }
 
 // Show folder files debug modal
-async function      showFolderFiles() {
+async function showFolderFiles() {
   if (!currentPart) return;
 
   const modal = document.getElementById("file-debug-modal");
