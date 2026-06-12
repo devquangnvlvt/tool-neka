@@ -450,6 +450,70 @@ async function checkMissingThumbnailsForKit(kitFolder) {
   }
 }
 
+// Check for corrupted images of a specific kit
+async function checkCorruptedImagesForKit(kitFolder) {
+  try {
+    const response = await fetch("/api/check_corrupted_images", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kit: kitFolder }),
+    });
+    const result = await response.json();
+
+    if (result.success && result.corrupted_files.length > 0) {
+      const files = result.corrupted_files;
+      
+      const notificationHTML = `
+        <div id="corrupted-warning-box-kit" style="
+          background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+          border-left: 5px solid #dc3545;
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 10px;
+          box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+        ">
+          <div style="font-weight: bold; color: #721c24; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">🚨</span>
+            <strong>${kitFolder}</strong> - Phát hiện ${files.length} ảnh bị lỗi cấu trúc (Trailing Garbage)
+          </div>
+          <div style="color: #721c24; max-height: 100px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px;">
+            <strong>Ảnh bị lỗi:</strong><br> ${files.slice(0, 10).join("<br>")}${files.length > 10 ? `<br>... +${files.length - 10} file khác` : ''}
+          </div>
+        </div>
+      `;
+
+      let warningsDiv = document.getElementById("corrupted-warnings");
+      if (!warningsDiv) {
+          warningsDiv = document.createElement("div");
+          warningsDiv.id = "corrupted-warnings";
+          const partThumbWarnings = document.getElementById("part-thumbnail-warning");
+          if(partThumbWarnings) {
+              partThumbWarnings.parentNode.insertBefore(warningsDiv, partThumbWarnings.nextSibling);
+          } else {
+              const container = document.querySelector('.container-full');
+              if (container) {
+                  container.insertBefore(warningsDiv, container.firstChild);
+              }
+          }
+      }
+      warningsDiv.innerHTML = notificationHTML;
+      warningsDiv.style.display = 'block';
+
+      console.warn(`🚨 Kit "${kitFolder}" - Phát hiện ${files.length} ảnh bị lỗi cấu trúc`);
+    } else {
+      const warningsDiv = document.getElementById("corrupted-warnings");
+      if (warningsDiv) {
+        warningsDiv.innerHTML = '';
+        warningsDiv.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error("Error checking corrupted images for kit:", error);
+  }
+}
+
 // Global initialization
 document.addEventListener("DOMContentLoaded", () => {
   fetchServerIP();
@@ -684,6 +748,8 @@ async function loadKitStructure(preserveSelection = false) {
 
       // Check for missing thumbnails for the current kit
       setTimeout(() => checkMissingThumbnailsForKit(CURRENT_KIT_FOLDER), 500);
+      // Check for corrupted images
+      setTimeout(() => checkCorruptedImagesForKit(CURRENT_KIT_FOLDER), 600);
     } else {
       hideGlobalLoading();
       console.error("Error loading kit structure:", result.message);

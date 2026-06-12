@@ -230,6 +230,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/fix_colors_by_point': self.handle_fix_colors_by_point,
             '/api/reorder_images': self.handle_reorder_images,
             '/api/check_missing_thumbnails': self.handle_check_missing_thumbnails,
+            '/api/check_corrupted_images': self.handle_check_corrupted_images,
         }
 
 
@@ -243,6 +244,67 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_api_response(False, f"Internal Error: {str(e)}")
         else:
             self.send_error(404, "Unknown API endpoint")
+
+    def handle_check_corrupted_images(self, data):
+        kit_folder = data.get('kit')
+        if not kit_folder:
+            self.send_api_response(False, "Missing kit parameter")
+            return
+            
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            if not os.path.exists(kit_path):
+                self.send_api_response(False, "Kit not found")
+                return
+                
+            corrupted_files = []
+            import struct
+            for root, dirs, files in os.walk(kit_path):
+                for f in files:
+                    if f.lower().endswith('.png'):
+                        full_path = os.path.join(root, f)
+                        rel_path = os.path.relpath(full_path, kit_path).replace('\\', '/')
+                        
+                        try:
+                            with open(full_path, 'rb') as pf:
+                                pf.seek(0, 2)
+                                file_size = pf.tell()
+                                if file_size < 12: continue
+                                
+                                pf.seek(0)
+                                signature = pf.read(8)
+                                if signature != b'\x89PNG\r\n\x1a\n': continue
+                                
+                                pos = 8
+                                is_corrupted = False
+                                while pos < file_size:
+                                    pf.seek(pos)
+                                    lb = pf.read(4)
+                                    if len(lb) < 4: break
+                                    l = struct.unpack('>I', lb)[0]
+                                    ct = pf.read(4).decode('ascii', errors='ignore')
+                                    pos += 8 + l + 4
+                                    if ct == 'IEND':
+                                        remaining = file_size - pos
+                                        if remaining > 0:
+                                            is_corrupted = True
+                                        break
+                                
+                                if is_corrupted:
+                                    corrupted_files.append(rel_path)
+                        except Exception as e:
+                            pass
+                            
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.end_headers()
+            response = json.dumps({
+                "success": True,
+                "corrupted_files": corrupted_files
+            })
+            self.wfile.write(response.encode('utf-8'))
+        except Exception as e:
+            self.send_api_response(False, f"Server Error: {str(e)}")
 
    
 
