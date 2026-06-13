@@ -462,7 +462,7 @@ async function checkCorruptedImagesForKit(kitFolder) {
 
     if (result.success && result.corrupted_files.length > 0) {
       const files = result.corrupted_files;
-      
+
       const notificationHTML = `
         <div id="corrupted-warning-box-kit" style="
           background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
@@ -476,7 +476,7 @@ async function checkCorruptedImagesForKit(kitFolder) {
         ">
           <div style="font-weight: bold; color: #721c24; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
             <span style="font-size: 16px;">🚨</span>
-            <strong>${kitFolder}</strong> - Phát hiện ${files.length} ảnh bị lỗi cấu trúc (Trailing Garbage)
+            <strong>${kitFolder}</strong> - Phát hiện ${files.length} ảnh bị lỗi cấu trúc
           </div>
           <div style="color: #721c24; max-height: 100px; overflow-y: auto; background: rgba(255,255,255,0.5); padding: 8px; border-radius: 4px;">
             <strong>Ảnh bị lỗi:</strong><br> ${files.slice(0, 10).join("<br>")}${files.length > 10 ? `<br>... +${files.length - 10} file khác` : ''}
@@ -486,17 +486,17 @@ async function checkCorruptedImagesForKit(kitFolder) {
 
       let warningsDiv = document.getElementById("corrupted-warnings");
       if (!warningsDiv) {
-          warningsDiv = document.createElement("div");
-          warningsDiv.id = "corrupted-warnings";
-          const partThumbWarnings = document.getElementById("part-thumbnail-warning");
-          if(partThumbWarnings) {
-              partThumbWarnings.parentNode.insertBefore(warningsDiv, partThumbWarnings.nextSibling);
-          } else {
-              const container = document.querySelector('.container-full');
-              if (container) {
-                  container.insertBefore(warningsDiv, container.firstChild);
-              }
+        warningsDiv = document.createElement("div");
+        warningsDiv.id = "corrupted-warnings";
+        const partThumbWarnings = document.getElementById("part-thumbnail-warning");
+        if (partThumbWarnings) {
+          partThumbWarnings.parentNode.insertBefore(warningsDiv, partThumbWarnings.nextSibling);
+        } else {
+          const container = document.querySelector('.container-full');
+          if (container) {
+            container.insertBefore(warningsDiv, container.firstChild);
           }
+        }
       }
       warningsDiv.innerHTML = notificationHTML;
       warningsDiv.style.display = 'block';
