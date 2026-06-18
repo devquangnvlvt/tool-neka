@@ -46,7 +46,7 @@ body {
 
 .main-content {
   display: grid;
-  grid-template-columns: 1fr 1000px;
+  grid-template-columns: 1fr 1245px;
   gap: 20px;
   padding: 30px 0px 0px 0px;
 }
