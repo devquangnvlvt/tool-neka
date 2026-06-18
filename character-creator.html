@@ -110,6 +110,9 @@
               <button class="btn btn-red btn-small m-l-5" onclick="deleteAllThumbs()">
                 Xóa Thumb toàn bộ (v)
               </button>
+              <button class="btn btn-orange btn-small m-l-5" onclick="openMergeFoldersModal()">
+                Gộp 2 folder
+              </button>
             </div>
           </div>
           <div class="nav-icons" id="nav-icons"></div>
@@ -511,6 +514,37 @@
           <div class="info-box p-15 m-t-20">
             <p class="font-13" style="color: #1976d2;">Thắc mắc gì hỏi: <b>Trâm cmc</b></p>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Merge Folders Modal -->
+  <div id="merge-folders-modal-overlay" class="modal-overlay">
+    <div class="modal-content modal-custom-medium" style="background: white; border-radius: 8px;">
+      <div class="merge-header">
+        <h2>Gộp 2 thư mục bộ phận</h2>
+        <button class="btn btn-secondary" onclick="closeMergeFoldersModal()">✖</button>
+      </div>
+      <div class="p-20">
+        <div class="input-wrapper m-b-15">
+          <label class="font-12 text-muted m-b-5 d-block">Thư mục 1 cần gộp:</label>
+          <input type="text" id="merge-folders-input1" list="merge-folders-list1" class="debug-input w-100 p-10 br-8" style="border: 1px solid #ccc; font-size: 14px; background: white; color: black;" placeholder="Nhập hoặc chọn thư mục 1...">
+          <datalist id="merge-folders-list1"></datalist>
+        </div>
+        <div class="input-wrapper m-b-15">
+          <label class="font-12 text-muted m-b-5 d-block">Thư mục 2 cần gộp:</label>
+          <input type="text" id="merge-folders-input2" list="merge-folders-list2" class="debug-input w-100 p-10 br-8" style="border: 1px solid #ccc; font-size: 14px; background: white; color: black;" placeholder="Nhập hoặc chọn thư mục 2...">
+          <datalist id="merge-folders-list2"></datalist>
+        </div>
+        <div class="input-wrapper m-b-20">
+          <label class="font-12 text-muted m-b-5 d-block">Nhập tên thư mục mới sau gộp:</label>
+          <input type="text" id="merge-folders-new-name" class="debug-input w-100 p-10 br-8" style="border: 1px solid #ccc; font-size: 14px; background: white; color: black;" placeholder="Ví dụ: 100-3-toc-gop"
+            onkeydown="if(event.key==='Enter') confirmMergeFolders(); if(event.key==='Escape') closeMergeFoldersModal();">
+        </div>
+        <div class="flex-justify-end flex-gap-10">
+          <button class="btn btn-secondary" onclick="closeMergeFoldersModal()">Hủy</button>
+          <button class="btn btn-green" onclick="confirmMergeFolders()">Xác nhận gộp</button>
         </div>
       </div>
     </div>

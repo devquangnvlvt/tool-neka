@@ -2325,18 +2325,6 @@ async function randomizeCharacter() {
     const part = kitStructure[partIndex];
     if (part.items_count === 0) continue;
 
-    // 85% chance to select an item, 15% chance to skip (None)
-    if (Math.random() < 0.15) {
-      characterLayers[partIndex] = {
-        folderName: part.folder,
-        itemNumber: -1,
-        color: "default",
-        colorIndex: 0,
-        sortOrder: part.x * 1000 + partIndex,
-      };
-      continue;
-    }
-
     const itemNumber = Math.floor(Math.random() * part.items_count) + 1;
     const colors = part.colors.length > 0 ? part.colors : ["default"];
     const colorIdx = Math.floor(Math.random() * colors.length);
@@ -4759,4 +4747,96 @@ window.addEventListener("click", (event) => {
   if (event.target === instructionModal) {
     closeInstructionModal();
   }
+  const mergeFoldersModal = document.getElementById("merge-folders-modal-overlay");
+  if (event.target === mergeFoldersModal) {
+    closeMergeFoldersModal();
+  }
 });
+
+// --- Merge Folders Modal Logic ---
+function openMergeFoldersModal() {
+  if (!CURRENT_KIT_FOLDER) {
+    alert("Vui lòng chọn một bộ sưu tập trước.");
+    return;
+  }
+
+  // Populate datalists
+  const list1 = document.getElementById("merge-folders-list1");
+  const list2 = document.getElementById("merge-folders-list2");
+  list1.innerHTML = "";
+  list2.innerHTML = "";
+
+  if (kitStructure) {
+    kitStructure.forEach(part => {
+      const opt1 = document.createElement("option");
+      opt1.value = part.folder;
+      list1.appendChild(opt1);
+
+      const opt2 = document.createElement("option");
+      opt2.value = part.folder;
+      list2.appendChild(opt2);
+    });
+  }
+
+  document.getElementById("merge-folders-input1").value = "";
+  document.getElementById("merge-folders-input2").value = "";
+  document.getElementById("merge-folders-new-name").value = "";
+  document.getElementById("merge-folders-modal-overlay").style.display = "flex";
+}
+
+function closeMergeFoldersModal() {
+  document.getElementById("merge-folders-modal-overlay").style.display = "none";
+}
+
+async function confirmMergeFolders() {
+  const folder1 = document.getElementById("merge-folders-input1").value.trim();
+  const folder2 = document.getElementById("merge-folders-input2").value.trim();
+  const newFolder = document.getElementById("merge-folders-new-name").value.trim();
+
+  if (!folder1 || !folder2 || !newFolder) {
+    alert("Vui lòng nhập đầy đủ thông tin.");
+    return;
+  }
+
+  if (folder1 === folder2) {
+    alert("Hai thư mục cần gộp phải khác nhau.");
+    return;
+  }
+
+  if (!/^\d+-\d+(?:-.*)?$/.test(newFolder)) {
+    alert("Tên thư mục mới phải đúng định dạng số X-Y (hoặc X-Y-Z) (VD: 100-3-toc-gop) để sắp xếp layer.");
+    return;
+  }
+
+  if (!confirm(`Bạn chắc chắn muốn gộp thư mục "${folder1}" và "${folder2}" thành "${newFolder}"?\n\nChú ý: Hai thư mục cũ sẽ bị xóa (được đưa vào Thùng rác).`)) {
+    return;
+  }
+
+  showGlobalLoading("Đang gộp 2 thư mục bộ phận...");
+  try {
+    const response = await fetch("/api/merge_folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        folder1: folder1,
+        folder2: folder2,
+        new_folder: newFolder
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      alert(result.message);
+      closeMergeFoldersModal();
+      location.reload();
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Lỗi server hoặc lỗi kết nối khi gộp thư mục.");
+  } finally {
+    hideGlobalLoading();
+  }
+}

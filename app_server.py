@@ -209,6 +209,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/delete_file': self.handle_delete_file,
             '/api/rename_file': self.handle_rename_file,
             '/api/merge_layers': self.handle_merge_layers,
+            '/api/merge_folders': self.handle_merge_folders,
             '/api/get_kit_structure': self.handle_get_kit_structure,
             '/api/get_kits_list': self.handle_get_kits_list,
             '/api/flatten_colors': self.handle_flatten_colors,
@@ -1089,6 +1090,169 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             
         except Exception as e:
             self.send_api_response(False, f"Error renaming file: {str(e)}")
+
+    def handle_merge_folders(self, data):
+        kit_folder = data.get('kit')
+        folder1 = data.get('folder1')
+        folder2 = data.get('folder2')
+        new_folder = data.get('new_folder')
+
+        if not kit_folder or not folder1 or not folder2 or not new_folder:
+            self.send_api_response(False, "Thiếu tham số (kit, folder1, folder2, new_folder)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            path1 = safe_join(kit_path, folder1)
+            path2 = safe_join(kit_path, folder2)
+            path_new = safe_join(kit_path, new_folder)
+
+            if not os.path.exists(path1) or not os.path.isdir(path1):
+                self.send_api_response(False, f"Thư mục 1 '{folder1}' không tồn tại hoặc không phải là thư mục.")
+                return
+
+            if not os.path.exists(path2) or not os.path.isdir(path2):
+                self.send_api_response(False, f"Thư mục 2 '{folder2}' không tồn tại hoặc không phải là thư mục.")
+                return
+
+            # Allow new_folder to equal folder1 or folder2, but if it's different and already exists, raise error
+            if os.path.exists(path_new) and new_folder != folder1 and new_folder != folder2:
+                self.send_api_response(False, f"Thư mục mới '{new_folder}' đã tồn tại. Vui lòng chọn tên khác.")
+                return
+
+            if not validate_id(new_folder):
+                self.send_api_response(False, f"Tên thư mục mới '{new_folder}' không hợp lệ (chỉ chấp nhận chữ cái, số, gạch ngang, gạch dưới, chấm, slash).")
+                return
+
+            # Create a temporary directory for merging to avoid conflicts (especially when new_folder is one of the sources)
+            path_new_tmp = os.path.join(kit_path, f"{new_folder}_merge_tmp_{os.getpid()}")
+            if os.path.exists(path_new_tmp):
+                shutil.rmtree(path_new_tmp)
+            os.makedirs(path_new_tmp, exist_ok=True)
+
+            def scan_image_indices(base_path):
+                indices = set()
+                # 1. Quét các file ở thư mục gốc của part
+                for item in os.listdir(base_path):
+                    item_path = os.path.join(base_path, item)
+                    if os.path.isfile(item_path):
+                        m = re.match(r"^(?:thumb_)?(\d+)\.(png|webp)$", item, re.IGNORECASE)
+                        if m:
+                            indices.add(int(m.group(1)))
+                    elif os.path.isdir(item_path):
+                        # Quét các file trong các thư mục màu con
+                        for sub_item in os.listdir(item_path):
+                            sub_item_path = os.path.join(item_path, sub_item)
+                            if os.path.isfile(sub_item_path):
+                                m = re.match(r"^(?:thumb_)?(\d+)\.(png|webp)$", sub_item, re.IGNORECASE)
+                                if m:
+                                    indices.add(int(m.group(1)))
+                return sorted(list(indices))
+
+            indices1 = scan_image_indices(path1)
+            indices2 = scan_image_indices(path2)
+
+            # Khởi tạo ánh xạ index cũ sang index mới tuần tự từ 1 đến N
+            mapping1 = {old_idx: i + 1 for i, old_idx in enumerate(indices1)}
+            offset = len(indices1)
+            mapping2 = {old_idx: i + 1 + offset for i, old_idx in enumerate(indices2)}
+
+            def copy_and_rename_by_index(src_dir, dst_dir, mapping):
+                if not os.path.exists(src_dir):
+                    return
+                os.makedirs(dst_dir, exist_ok=True)
+                for item in os.listdir(src_dir):
+                    item_path = os.path.join(src_dir, item)
+                    if os.path.isfile(item_path):
+                        m = re.match(r"^(thumb_)?(\d+)\.(png|webp)$", item, re.IGNORECASE)
+                        if m:
+                            is_thumb = m.group(1) is not None
+                            old_idx = int(m.group(2))
+                            ext = m.group(3)
+                            if old_idx in mapping:
+                                new_idx = mapping[old_idx]
+                                new_name = f"thumb_{new_idx}.{ext}" if is_thumb else f"{new_idx}.{ext}"
+                                shutil.copy2(item_path, os.path.join(dst_dir, new_name))
+
+            # 1. Copy Folder 1 files (gốc) sang thư mục tạm
+            copy_and_rename_by_index(path1, path_new_tmp, mapping1)
+
+            # 2. Copy Folder 2 files (gốc) sang thư mục tạm
+            copy_and_rename_by_index(path2, path_new_tmp, mapping2)
+
+            # 3. Quét tất cả các folder màu hiện có ở cả 2 bên
+            color_subfolders = set()
+            for item in os.listdir(path1) + os.listdir(path2):
+                if os.path.isdir(os.path.join(path1, item)) and item != "cache_blobs":
+                    color_subfolders.add(item)
+                if os.path.isdir(os.path.join(path2, item)) and item != "cache_blobs":
+                    color_subfolders.add(item)
+
+            for color in color_subfolders:
+                color_path1 = os.path.join(path1, color)
+                color_path2 = os.path.join(path2, color)
+                color_path_new = os.path.join(path_new_tmp, color)
+                copy_and_rename_by_index(color_path1, color_path_new, mapping1)
+                copy_and_rename_by_index(color_path2, color_path_new, mapping2)
+
+            # 4. Copy tệp nav.png/nav.webp ngẫu nhiên từ một trong hai thư mục cũ nếu tồn tại
+            nav_files = []
+            for path_src in [path1, path2]:
+                for ext in ["png", "webp"]:
+                    nav_path = os.path.join(path_src, f"nav.{ext}")
+                    if os.path.exists(nav_path) and os.path.isfile(nav_path):
+                        nav_files.append(nav_path)
+            
+            if nav_files:
+                import random
+                selected_nav = random.choice(nav_files)
+                ext = selected_nav.split('.')[-1]
+                shutil.copy2(selected_nav, os.path.join(path_new_tmp, f"nav.{ext}"))
+
+            # 5. Di chuyển 2 thư mục cũ vào thùng rác để dọn dẹp
+            # Chú ý: Di chuyển trước khi đổi tên thư mục tạm để giải phóng tên (nếu new_folder trùng với folder1/folder2)
+            move_to_trash(path1, kit_folder=kit_folder, part_folder=folder1)
+            move_to_trash(path2, kit_folder=kit_folder, part_folder=folder2)
+
+            # 6. Đổi tên thư mục tạm thành thư mục đích cuối cùng
+            if os.path.exists(path_new):
+                if os.path.isdir(path_new):
+                    shutil.rmtree(path_new)
+                else:
+                    os.remove(path_new)
+            shutil.move(path_new_tmp, path_new)
+
+            # 7. Cập nhật file separated_layers.json nếu có
+            sep_layers_path = os.path.join(kit_path, "separated_layers.json")
+            if os.path.exists(sep_layers_path):
+                try:
+                    with open(sep_layers_path, 'r', encoding='utf-8') as f:
+                        separated_layers = json.load(f)
+                    
+                    if not isinstance(separated_layers, list):
+                        separated_layers = []
+
+                    was_separated = (folder1 in separated_layers) or (folder2 in separated_layers)
+                    new_sep_layers = [x for x in separated_layers if x != folder1 and x != folder2]
+                    
+                    if was_separated:
+                        new_sep_layers.append(new_folder)
+                    
+                    with open(sep_layers_path, 'w', encoding='utf-8') as f:
+                        json.dump(new_sep_layers, f, ensure_ascii=False, indent=4)
+                except Exception as e:
+                    print(f"Error updating separated_layers.json: {e}")
+
+            self.send_api_response(True, f"Gộp thành công thư mục '{folder1}' và '{folder2}' thành '{new_folder}'. Tổng số {len(indices1) + len(indices2)} ảnh.")
+
+        except Exception as e:
+            # Dọn dẹp thư mục tạm nếu có lỗi xảy ra
+            try:
+                if 'path_new_tmp' in locals() and os.path.exists(path_new_tmp):
+                    shutil.rmtree(path_new_tmp)
+            except:
+                pass
+            self.send_api_response(False, f"Lỗi trong quá trình gộp thư mục: {str(e)}")
 
 
     def handle_merge_layers(self, data):
