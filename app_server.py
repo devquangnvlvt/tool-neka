@@ -12,7 +12,8 @@ import mimetypes
 import base64
 import traceback
 from urllib.parse import urlparse, parse_qs
-from PIL import Image, ImageEnhance
+from PIL import Image, ImageEnhance, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 import numpy as np
 from config import DATA_DIR, TRASH_DIR
 import time
@@ -210,6 +211,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/rename_file': self.handle_rename_file,
             '/api/merge_layers': self.handle_merge_layers,
             '/api/merge_folders': self.handle_merge_folders,
+            '/api/merge_multiple_folders': self.handle_merge_multiple_folders,
             '/api/get_kit_structure': self.handle_get_kit_structure,
             '/api/get_kits_list': self.handle_get_kits_list,
             '/api/flatten_colors': self.handle_flatten_colors,
@@ -1253,6 +1255,350 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             except:
                 pass
             self.send_api_response(False, f"Lỗi trong quá trình gộp thư mục: {str(e)}")
+
+
+    def handle_merge_multiple_folders(self, data):
+        kit_folder = data.get('kit')
+        folders = data.get('folders', []) # List of folders to merge, e.g. ["1-1-Hair", "2-2-HairBack"]
+        new_folder_name = data.get('new_folder_name', '').strip()
+
+        if not kit_folder or not folders or len(folders) < 2 or not new_folder_name:
+            self.send_api_response(False, "Thiếu tham số hoặc danh sách thư mục cần gộp hợp lệ (< 2 thư mục)")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            
+            # Resolve physical paths and indices
+            folder_info_list = []
+            for f in folders:
+                f_path = safe_join(kit_path, f)
+                if not os.path.exists(f_path) or not os.path.isdir(f_path):
+                    self.send_api_response(False, f"Thư mục '{f}' không tồn tại hoặc không phải là thư mục.")
+                    return
+                
+                # Parse current X and Y from folder name
+                match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", f)
+                if not match:
+                    self.send_api_response(False, f"Định dạng thư mục '{f}' không hợp lệ (phải là X-Y-Tên)")
+                    return
+                
+                x = int(match.group(1))
+                y = int(match.group(2))
+                suffix = match.group(3) or ""
+                
+                folder_info_list.append({
+                    'name': f,
+                    'path': f_path,
+                    'x': x,
+                    'y': y,
+                    'suffix': suffix
+                })
+            
+            # Sort by Y ascending to find the insertion/merge point
+            folder_info_list.sort(key=lambda item: item['y'])
+            
+            # Target position Y and X will take the values of the first folder in the sorted list
+            target_y = folder_info_list[0]['y']
+            target_x = folder_info_list[0]['x']
+            
+            # Assemble the new folder name
+            new_folder = new_folder_name
+            path_new = safe_join(kit_path, new_folder)
+            
+            # If new_folder already exists physically but is NOT one of the folders being merged
+            if os.path.exists(path_new) and new_folder not in folders:
+                self.send_api_response(False, f"Thư mục mới '{new_folder}' đã tồn tại vật lý. Vui lòng chọn tên khác.")
+                return
+
+            if not validate_id(new_folder):
+                self.send_api_response(False, f"Tên thư mục mới '{new_folder}' chứa ký tự không hợp lệ.")
+                return
+
+            # Temporary merge directory to compile files
+            path_new_tmp = os.path.join(kit_path, f"{new_folder}_merge_tmp_{os.getpid()}")
+            if os.path.exists(path_new_tmp):
+                shutil.rmtree(path_new_tmp)
+            os.makedirs(path_new_tmp, exist_ok=True)
+
+            # Helper to scan image indices inside a part directory
+            def scan_image_indices(base_path):
+                indices = set()
+                if not os.path.exists(base_path) or not os.path.isdir(base_path):
+                    return []
+                for item in os.listdir(base_path):
+                    item_path = os.path.join(base_path, item)
+                    if os.path.isfile(item_path):
+                        m = re.match(r"^(?:thumb_)?(\d+)\.(png|webp)$", item, re.IGNORECASE)
+                        if m:
+                            indices.add(int(m.group(1)))
+                    elif os.path.isdir(item_path) and item != "cache_blobs":
+                        for sub_item in os.listdir(item_path):
+                            sub_item_path = os.path.join(item_path, sub_item)
+                            if os.path.isfile(sub_item_path):
+                                m = re.match(r"^(?:thumb_)?(\d+)\.(png|webp)$", sub_item, re.IGNORECASE)
+                                if m:
+                                    indices.add(int(m.group(1)))
+                return sorted(list(indices))
+
+            # Helper to copy and rename indices based on mapping
+            def copy_and_rename_by_index(src_dir, dst_dir, mapping):
+                if not os.path.exists(src_dir) or not os.path.isdir(src_dir):
+                    return
+                os.makedirs(dst_dir, exist_ok=True)
+                for item in os.listdir(src_dir):
+                    item_path = os.path.join(src_dir, item)
+                    if os.path.isfile(item_path):
+                        m = re.match(r"^(thumb_)?(\d+)\.(png|webp)$", item, re.IGNORECASE)
+                        if m:
+                            is_thumb = m.group(1) is not None
+                            old_idx = int(m.group(2))
+                            ext = m.group(3)
+                            if old_idx in mapping:
+                                new_idx = mapping[old_idx]
+                                new_name = f"thumb_{new_idx}.{ext}" if is_thumb else f"{new_idx}.{ext}"
+                                shutil.copy2(item_path, os.path.join(dst_dir, new_name))
+
+            # Check if any folder contains color classification subfolders
+            for info in folder_info_list:
+                for item in os.listdir(info['path']):
+                    sub_p = os.path.join(info['path'], item)
+                    if os.path.isdir(sub_p) and item != "cache_blobs" and item != "items_merged":
+                        self.send_api_response(False, f"Thư mục '{info['name']}' có chứa phân loại màu sắc ('{item}'), không thể gộp.")
+                        return
+
+            # Build sequential mappings for all folders being merged
+            mappings = [] # list of dicts
+            total_images_mapped = 0
+            offset = 0
+            
+            for info in folder_info_list:
+                indices = scan_image_indices(info['path'])
+                mapping = {old_idx: i + 1 + offset for i, old_idx in enumerate(indices)}
+                mappings.append(mapping)
+                offset += len(indices)
+                total_images_mapped += len(indices)
+
+            # 1. Copy main folder files
+            for idx, info in enumerate(folder_info_list):
+                copy_and_rename_by_index(info['path'], path_new_tmp, mappings[idx])
+
+            # 2. Gather and copy color subfolders
+            color_subfolders = set()
+            for info in folder_info_list:
+                for item in os.listdir(info['path']):
+                    sub_p = os.path.join(info['path'], item)
+                    if os.path.isdir(sub_p) and item != "cache_blobs":
+                        color_subfolders.add(item)
+
+            for color in color_subfolders:
+                for idx, info in enumerate(folder_info_list):
+                    color_src = os.path.join(info['path'], color)
+                    color_dst = os.path.join(path_new_tmp, color)
+                    copy_and_rename_by_index(color_src, color_dst, mappings[idx])
+
+            # 3. Copy nav.png/nav.webp from first folder that has it, fallback to others
+            nav_copied = False
+            for info in folder_info_list:
+                for ext in ["png", "webp"]:
+                    nav_path = os.path.join(info['path'], f"nav.{ext}")
+                    if os.path.exists(nav_path) and os.path.isfile(nav_path):
+                        shutil.copy2(nav_path, os.path.join(path_new_tmp, f"nav.{ext}"))
+                        nav_copied = True
+                        break
+                if nav_copied:
+                    break
+
+            # 4. Synchronize metadata.json
+            meta_path = os.path.join(kit_path, "metadata.json")
+            if os.path.exists(meta_path):
+                try:
+                    with open(meta_path, 'r', encoding='utf-8') as f:
+                        meta_data = json.load(f)
+                    
+                    parts = meta_data.get('data', {}).get('parts', [])
+                    
+                    # Ensure indices map correctly
+                    first_part_idx = folder_info_list[0]['y'] - 1
+                    
+                    if 0 <= first_part_idx < len(parts):
+                        first_part = parts[first_part_idx]
+                        merged_items = []
+                        
+                        # Accumulate all items in order
+                        for info in folder_info_list:
+                            part_idx = info['y'] - 1
+                            if 0 <= part_idx < len(parts):
+                                p_items = parts[part_idx].get('items', [])
+                                merged_items.extend(p_items)
+                        
+                        # Update first part
+                        first_part['items'] = merged_items
+                        match_suffix = re.match(r"^\d+-\d+-(.*)$", new_folder_name)
+                        suffix_name = match_suffix.group(1) if match_suffix else new_folder_name
+                        first_part['name'] = suffix_name
+                        
+                        # Clear items lists of all other merged parts to mark them as empty
+                        for info in folder_info_list[1:]:
+                            part_idx = info['y'] - 1
+                            if 0 <= part_idx < len(parts):
+                                parts[part_idx]['items'] = []
+                    
+                    # Compact the parts array: remove any part that has items = []
+                    indices_to_remove = [info['y'] - 1 for info in folder_info_list[1:]]
+                    compacted_parts = [p for p_idx, p in enumerate(parts) if p_idx not in indices_to_remove]
+                    
+                    meta_data['data']['parts'] = compacted_parts
+                    
+                    with open(meta_path, 'w', encoding='utf-8') as f:
+                        json.dump(meta_data, f, ensure_ascii=False, indent=2)
+                except Exception as e:
+                    print(f"ERROR: Failed to update metadata.json: {e}")
+
+            # 5. Synchronize separated_layers.json
+            sep_layers_path = os.path.join(kit_path, "separated_layers.json")
+            if os.path.exists(sep_layers_path):
+                try:
+                    with open(sep_layers_path, 'r', encoding='utf-8') as f:
+                        separated_layers = json.load(f)
+                    if not isinstance(separated_layers, list):
+                        separated_layers = []
+                    
+                    # Check if any of merged folders were separated
+                    was_separated = any(info['name'] in separated_layers for info in folder_info_list)
+                    # Remove all merged folders
+                    new_sep_layers = [x for x in separated_layers if x not in [info['name'] for info in folder_info_list]]
+                    if was_separated:
+                        new_sep_layers.append(new_folder)
+                    
+                    with open(sep_layers_path, 'w', encoding='utf-8') as f:
+                        json.dump(new_sep_layers, f, ensure_ascii=False, indent=4)
+                except Exception as e:
+                    print(f"ERROR: Failed to update separated_layers.json: {e}")
+
+            # 6. Safe swap with transaction (renaming to backup folders first)
+            backups = []
+            for info in folder_info_list:
+                bak_path = f"{info['path']}_bak_{os.getpid()}"
+                shutil.move(info['path'], bak_path)
+                backups.append((bak_path, info['name']))
+            
+            try:
+                # Place new merged folder
+                if os.path.exists(path_new):
+                    if os.path.isdir(path_new):
+                        shutil.rmtree(path_new)
+                    else:
+                        os.remove(path_new)
+                shutil.move(path_new_tmp, path_new)
+                
+                # Move backups to trash
+                for bak_path, origin_name in backups:
+                    move_to_trash(bak_path, kit_folder=kit_folder, part_folder=origin_name)
+            except Exception as ex:
+                # Rollback backups if moving path_new_tmp to path_new fails
+                for bak_path, origin_name in backups:
+                    if os.path.exists(bak_path):
+                        shutil.move(bak_path, os.path.join(kit_path, origin_name))
+                raise ex
+
+            # 7. AUTOMATICALLY RE-INDEX X-Y FOR ALL REMAINING FOLDERS IN THE KIT (RELATIVE SHIFT)
+            # Parse new folder coordinates to identify kept coordinates
+            new_folder_x = None
+            new_folder_y = None
+            match_new = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", new_folder)
+            if match_new:
+                new_folder_x = int(match_new.group(1))
+                new_folder_y = int(match_new.group(2))
+
+            deleted_coords = []
+            for info in folder_info_list:
+                # If this merged folder's coordinates match the new folder's coordinates, it's NOT deleted/vacated
+                if new_folder_x is not None and new_folder_y is not None:
+                    if info['x'] == new_folder_x and info['y'] == new_folder_y:
+                        continue
+                deleted_coords.append((info['x'], info['y']))
+
+            remaining_folders = []
+            for entry in os.listdir(kit_path):
+                entry_path = os.path.join(kit_path, entry)
+                if not os.path.isdir(entry_path) or entry == "cache_blobs" or entry == "items_merged":
+                    continue
+                # Skip the new folder to keep its name exactly as typed!
+                if entry == new_folder:
+                    continue
+                match = re.match(r"^(\d+)-(\d+)(?:-(.*))?$", entry)
+                if match:
+                    x = int(match.group(1))
+                    y = int(match.group(2))
+                    suffix = match.group(3) or ""
+                    remaining_folders.append({
+                        'old_name': entry,
+                        'old_path': entry_path,
+                        'x': x,
+                        'y': y,
+                        'suffix': suffix
+                    })
+            
+            # Sort by (y, x) ascending to rename lower indices first, avoiding conflicts when shifting down
+            remaining_folders.sort(key=lambda item: (item['y'], item['x']))
+            
+            # Calculate new shifted coordinates and rename
+            renamed_map = {} # old_name -> new_name
+            for info in remaining_folders:
+                new_x = info['x'] - sum(1 for dx, dy in deleted_coords if dx < info['x'])
+                new_y = info['y'] - sum(1 for dx, dy in deleted_coords if dy < info['y'])
+                
+                new_name = f"{new_x}-{new_y}"
+                if info['suffix']:
+                    new_name += f"-{info['suffix']}"
+                
+                renamed_map[info['old_name']] = new_name
+                
+                if info['old_name'] != new_name:
+                    old_p = info['old_path']
+                    new_p = os.path.join(kit_path, new_name)
+                    
+                    if os.path.exists(new_p):
+                        move_to_trash(new_p, kit_folder=kit_folder)
+                        time.sleep(0.1)
+                    
+                    try:
+                        shutil.move(old_p, new_p)
+                    except Exception as e:
+                        print(f"WARNING: Rename failed, retrying: {e}")
+                        time.sleep(0.5)
+                        shutil.move(old_p, new_p)
+            
+            # 8. Update separated_layers.json again with the final renamed folder names
+            if os.path.exists(sep_layers_path):
+                try:
+                    with open(sep_layers_path, 'r', encoding='utf-8') as f:
+                        separated_layers = json.load(f)
+                    
+                    final_sep_layers = []
+                    for folder_name in separated_layers:
+                        if folder_name in renamed_map:
+                            final_sep_layers.append(renamed_map[folder_name])
+                        else:
+                            final_sep_layers.append(folder_name)
+                    
+                    with open(sep_layers_path, 'w', encoding='utf-8') as f:
+                        json.dump(final_sep_layers, f, ensure_ascii=False, indent=4)
+                except Exception as e:
+                    print(f"ERROR: Failed to finalize separated_layers.json: {e}")
+
+            self.send_api_response(True, f"Gộp thành công {len(folders)} thư mục bộ phận thành '{new_folder}' và tự động đánh lại số thứ tự X-Y.")
+
+        except Exception as e:
+            try:
+                if 'path_new_tmp' in locals() and os.path.exists(path_new_tmp):
+                    shutil.rmtree(path_new_tmp)
+            except:
+                pass
+            import traceback
+            print(traceback.format_exc())
+            self.send_api_response(False, f"Lỗi khi gộp nhiều thư mục: {str(e)}")
 
 
     def handle_merge_layers(self, data):

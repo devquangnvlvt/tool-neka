@@ -114,6 +114,12 @@
               <button class="btn btn-orange btn-small m-l-5" onclick="openMergeFoldersModal()">
                 Gộp 2 folder
               </button>
+              <button id="toggle-select-merge-btn" class="btn btn-orange btn-small m-l-5" onclick="toggleSelectMergeMode()">
+                Chọn gộp nhiều
+              </button>
+              <button id="confirm-select-merge-btn" class="btn btn-green btn-small m-l-5" style="display: none;" onclick="openMultiMergeDialog()">
+                Gộp lại (<span id="select-merge-count">0</span>)
+              </button>
             </div>
           </div>
           <div class="nav-icons" id="nav-icons"></div>
@@ -552,6 +558,37 @@
         <div class="flex-justify-end flex-gap-10">
           <button class="btn btn-secondary" onclick="closeMergeFoldersModal()">Hủy</button>
           <button class="btn btn-green" onclick="confirmMergeFolders()">Xác nhận gộp</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Multi-Merge Folders Modal -->
+  <div id="multi-merge-modal-overlay" class="modal-overlay">
+    <div class="modal-content modal-custom-medium" style="background: white; border-radius: 8px;">
+      <div class="merge-header">
+        <h2>Gộp các thư mục bộ phận</h2>
+        <button class="btn btn-secondary" onclick="closeMultiMergeModal()">✖</button>
+      </div>
+      <div class="p-20">
+        <div class="m-b-15">
+          <label class="font-12 text-muted m-b-5 d-block">Các thư mục sẽ gộp:</label>
+          <div id="multi-merge-selected-list" style="background: #f1f2f6; padding: 10px; border-radius: 6px; font-size: 13px; color: #2f3542; max-height: 100px; overflow-y: auto;">
+          </div>
+        </div>
+        <div class="input-wrapper m-b-20">
+          <label class="font-12 text-muted m-b-5 d-block">Nhập tên cho thư mục gộp mới:</label>
+          <input type="text" id="multi-merge-new-suffix" class="debug-input w-100 p-10 br-8"
+            style="border: 1px solid #ccc; font-size: 14px; background: white; color: black;"
+            placeholder="Ví dụ: 5-5-19-5 hoặc toc-gop"
+            onkeydown="if(event.key==='Enter') confirmMultiMergeFolders(); if(event.key==='Escape') closeMultiMergeModal();">
+          <span style="font-size: 11px; color: #666; margin-top: 5px; display: block;">
+            * Thư mục mới sẽ mang chính xác tên bạn đã nhập ở trên.
+          </span>
+        </div>
+        <div class="flex-justify-end flex-gap-10">
+          <button class="btn btn-secondary" onclick="closeMultiMergeModal()">Hủy</button>
+          <button class="btn btn-green" onclick="confirmMultiMergeFolders()">Xác nhận gộp</button>
         </div>
       </div>
     </div>

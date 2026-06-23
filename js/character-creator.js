@@ -18,6 +18,9 @@ let showColorThumb = false; // Toggle: hiển thị thumb theo màu
 let partSortType = "y"; // 'x' or 'y'
 let currentZFilter = "all"; // 'all', '1', '2'
 let debugSelectedIds = new Set();
+let selectMergeMode = false;
+let selectedMergeFolders = [];
+let lastCheckedIndex = null;
 
 let restoredActivePartFolder = null;
 let allKits = [];
@@ -887,9 +890,66 @@ function initializeApp(preserveSelection = false) {
       navIcon.style.borderColor = "#ff7675";
     }
 
-    navIcon.onclick = () => {
-      setFocusArea("parts");
-      selectPart(index, part);
+    // Checkbox for bulk merge selection
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "merge-checkbox";
+    checkbox.style.position = "absolute";
+    checkbox.style.top = "5px";
+    checkbox.style.left = "5px";
+    checkbox.style.zIndex = "10";
+    checkbox.style.width = "18px";
+    checkbox.style.height = "18px";
+    checkbox.style.cursor = part.has_colors ? "not-allowed" : "pointer";
+    checkbox.style.display = selectMergeMode ? "block" : "none";
+    checkbox.checked = selectedMergeFolders.includes(part.folder);
+    if (part.has_colors) {
+      checkbox.disabled = true;
+      checkbox.style.opacity = "0.5";
+    }
+    checkbox.onclick = (e) => {
+      e.stopPropagation();
+      if (part.has_colors) {
+        alert("Bộ phận này có mã màu, không thể gộp!");
+        checkbox.checked = false;
+        return;
+      }
+      handleCheckboxClick(index, checkbox.checked);
+    };
+    navIcon.appendChild(checkbox);
+
+    if (selectMergeMode && part.has_colors) {
+      navIcon.style.opacity = "0.4";
+    }
+
+    // Ctrl + Right-click contextmenu listener
+    navIcon.addEventListener("contextmenu", (e) => {
+      if (selectMergeMode) {
+        e.preventDefault();
+        if (part.has_colors) {
+          alert("Bộ phận này có mã màu, không thể gộp!");
+          return;
+        }
+        handleRangeSelect(index);
+      }
+    });
+
+    navIcon.onclick = (e) => {
+      if (selectMergeMode) {
+        e.stopPropagation();
+        if (part.has_colors) {
+          alert("Bộ phận này có mã màu, không thể gộp!");
+          return;
+        }
+        const cb = navIcon.querySelector(".merge-checkbox");
+        if (cb) {
+          cb.checked = !cb.checked;
+          handleCheckboxClick(index, cb.checked);
+        }
+      } else {
+        setFocusArea("parts");
+        selectPart(index, part);
+      }
     };
 
     navContainer.appendChild(navIcon);
@@ -4751,6 +4811,10 @@ window.addEventListener("click", (event) => {
   if (event.target === mergeFoldersModal) {
     closeMergeFoldersModal();
   }
+  const multiMergeModal = document.getElementById("multi-merge-modal-overlay");
+  if (event.target === multiMergeModal) {
+    closeMultiMergeModal();
+  }
 });
 
 // --- Merge Folders Modal Logic ---
@@ -4836,6 +4900,187 @@ async function confirmMergeFolders() {
   } catch (error) {
     console.error(error);
     alert("Lỗi server hoặc lỗi kết nối khi gộp thư mục.");
+  } finally {
+    hideGlobalLoading();
+  }
+}
+
+function toggleSelectMergeMode() {
+  selectMergeMode = !selectMergeMode;
+  selectedMergeFolders = [];
+  lastCheckedIndex = null;
+
+  const btn = document.getElementById("toggle-select-merge-btn");
+  const confirmBtn = document.getElementById("confirm-select-merge-btn");
+
+  if (selectMergeMode) {
+    btn.textContent = "Hủy chọn gộp";
+    btn.className = "btn btn-red btn-small m-l-5";
+    confirmBtn.style.display = "inline-block";
+    confirmBtn.disabled = true;
+    document.getElementById("select-merge-count").textContent = "0";
+  } else {
+    btn.textContent = "Chọn gộp nhiều";
+    btn.className = "btn btn-orange btn-small m-l-5";
+    confirmBtn.style.display = "none";
+  }
+
+  // Toggle checkboxes and style display in UI
+  document.querySelectorAll(".nav-icon").forEach(navEl => {
+    const partIdx = parseInt(navEl.dataset.partIndex);
+    const part = kitStructure[partIdx];
+    const cb = navEl.querySelector(".merge-checkbox");
+    if (cb) {
+      cb.style.display = selectMergeMode ? "block" : "none";
+      cb.checked = false;
+    }
+    
+    if (selectMergeMode) {
+      if (part && part.has_colors) {
+        navEl.style.opacity = "0.4";
+        if (cb) cb.disabled = true;
+      }
+    } else {
+      navEl.style.opacity = "";
+      if (cb) cb.disabled = false;
+    }
+  });
+}
+
+function handleCheckboxClick(index, isChecked) {
+  const part = kitStructure[index];
+  if (isChecked) {
+    if (!selectedMergeFolders.includes(part.folder)) {
+      selectedMergeFolders.push(part.folder);
+    }
+    lastCheckedIndex = index;
+  } else {
+    selectedMergeFolders = selectedMergeFolders.filter(f => f !== part.folder);
+    if (lastCheckedIndex === index) {
+      lastCheckedIndex = null;
+    }
+  }
+  updateMergeButtonState();
+}
+
+function handleRangeSelect(index) {
+  if (lastCheckedIndex === null) {
+    // Treat as first selection
+    const part = kitStructure[index];
+    const navEl = document.querySelector(`.nav-icon[data-part-index="${index}"]`);
+    if (navEl) {
+      const cb = navEl.querySelector(".merge-checkbox");
+      if (cb) {
+        cb.checked = true;
+        handleCheckboxClick(index, true);
+      }
+    }
+    return;
+  }
+
+  // Find position in current sorted view
+  const idx1 = currentSortedIndices.indexOf(lastCheckedIndex);
+  const idx2 = currentSortedIndices.indexOf(index);
+  if (idx1 === -1 || idx2 === -1) return;
+
+  const start = Math.min(idx1, idx2);
+  const end = Math.max(idx1, idx2);
+
+  for (let i = start; i <= end; i++) {
+    const partIdx = currentSortedIndices[i];
+    const part = kitStructure[partIdx];
+    
+    // Skip parts with colors
+    if (part && part.has_colors) {
+      continue;
+    }
+    
+    const navEl = document.querySelector(`.nav-icon[data-part-index="${partIdx}"]`);
+    if (navEl) {
+      const cb = navEl.querySelector(".merge-checkbox");
+      if (cb) {
+        cb.checked = true;
+        if (!selectedMergeFolders.includes(part.folder)) {
+          selectedMergeFolders.push(part.folder);
+        }
+      }
+    }
+  }
+
+  lastCheckedIndex = index;
+  updateMergeButtonState();
+}
+
+function updateMergeButtonState() {
+  const confirmBtn = document.getElementById("confirm-select-merge-btn");
+  const countSpan = document.getElementById("select-merge-count");
+  const count = selectedMergeFolders.length;
+
+  countSpan.textContent = count;
+  if (count >= 2) {
+    confirmBtn.disabled = false;
+  } else {
+    confirmBtn.disabled = true;
+  }
+}
+
+function openMultiMergeDialog() {
+  if (selectedMergeFolders.length < 2) {
+    alert("Vui lòng chọn ít nhất 2 thư mục để gộp.");
+    return;
+  }
+
+  const listDiv = document.getElementById("multi-merge-selected-list");
+  listDiv.innerHTML = selectedMergeFolders.map(f => `<div>📁 ${f}</div>`).join("");
+  
+  document.getElementById("multi-merge-new-suffix").value = "";
+  document.getElementById("multi-merge-modal-overlay").style.display = "flex";
+}
+
+function closeMultiMergeModal() {
+  document.getElementById("multi-merge-modal-overlay").style.display = "none";
+}
+
+async function confirmMultiMergeFolders() {
+  const newFolderName = document.getElementById("multi-merge-new-suffix").value.trim();
+  if (!newFolderName) {
+    alert("Vui lòng nhập tên cho thư mục gộp mới.");
+    return;
+  }
+
+  if (!/^[a-zA-Z0-9_\-]+$/.test(newFolderName)) {
+    alert("Tên thư mục chỉ chấp nhận chữ cái không dấu, số, dấu gạch ngang và gạch dưới.");
+    return;
+  }
+
+  if (!confirm(`Bạn chắc chắn muốn gộp ${selectedMergeFolders.length} thư mục đã chọn?\n\n* Sau khi gộp, hệ thống sẽ tự động đổi tên và đánh số lại tất cả thư mục còn lại.`)) {
+    return;
+  }
+
+  showGlobalLoading("Đang thực hiện gộp nhiều thư mục bộ phận...");
+  try {
+    const response = await fetch("/api/merge_multiple_folders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kit: CURRENT_KIT_FOLDER,
+        folders: selectedMergeFolders,
+        new_folder_name: newFolderName
+      })
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      alert(result.message);
+      closeMultiMergeModal();
+      toggleSelectMergeMode(); // Turn off merge mode
+      location.reload(); // Reload kit sequence
+    } else {
+      alert("Lỗi: " + result.message);
+    }
+  } catch (error) {
+    console.error(error);
+    alert("Lỗi kết nối hoặc lỗi máy chủ khi gộp thư mục.");
   } finally {
     hideGlobalLoading();
   }

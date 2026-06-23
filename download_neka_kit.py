@@ -4,7 +4,8 @@ import time
 import sys
 import requests
 import shutil
-from PIL import Image
+from PIL import Image, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 import numpy as np
 import tempfile
 from config import DATA_DIR
