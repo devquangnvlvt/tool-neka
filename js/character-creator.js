@@ -1267,8 +1267,8 @@ async function loadItems(part) {
           itemDiv.classList.add("missing-thumbnail");
           if (!itemDiv.querySelector(".missing-thumb-label")) {
             const label = document.createElement("div");
-            label.className = "missing-thumb-label";
-            label.textContent = "Thiếu thumb";
+            // label.className = "missing-thumb-label";
+            // label.textContent = "Thiếu thumb";
             itemDiv.appendChild(label);
           }
           imgEl.onload = null; // Prevent onload from firing for placeholder
@@ -4958,7 +4958,7 @@ function handleRangeSelect(index) {
   for (let i = start; i <= end; i++) {
     const partIdx = currentSortedIndices[i];
     const part = kitStructure[partIdx];
-    
+
     const navEl = document.querySelector(`.nav-icon[data-part-index="${partIdx}"]`);
     if (navEl) {
       const cb = navEl.querySelector(".merge-checkbox");
@@ -4996,7 +4996,7 @@ function openMultiMergeDialog() {
 
   const listDiv = document.getElementById("multi-merge-selected-list");
   listDiv.innerHTML = selectedMergeFolders.map(f => `<div>📁 ${f}</div>`).join("");
-  
+
   document.getElementById("multi-merge-new-suffix").value = "";
   document.getElementById("multi-merge-modal-overlay").style.display = "flex";
 }

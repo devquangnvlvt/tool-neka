@@ -740,6 +740,7 @@ body {
   border-bottom: 1px solid #eee;
   display: flex;
   justify-content: space-between;
+  border-radius: 8px;
   align-items: center;
 }
 
@@ -1802,6 +1803,10 @@ body {
 
 .item-option.missing-thumbnail img {
   opacity: 0.6;
+}
+
+.modal-content .modal-custom-medium {
+  border-radius: 8px;
 }
 
 .missing-thumb-label {

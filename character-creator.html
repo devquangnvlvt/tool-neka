@@ -114,10 +114,12 @@
               <button class="btn btn-orange btn-small m-l-5" onclick="openMergeFoldersModal()">
                 Gộp 2 folder
               </button>
-              <button id="toggle-select-merge-btn" class="btn btn-orange btn-small m-l-5" onclick="toggleSelectMergeMode()">
+              <button id="toggle-select-merge-btn" class="btn btn-orange btn-small m-l-5"
+                onclick="toggleSelectMergeMode()">
                 Chọn gộp nhiều
               </button>
-              <button id="confirm-select-merge-btn" class="btn btn-green btn-small m-l-5" style="display: none;" onclick="openMultiMergeDialog()">
+              <button id="confirm-select-merge-btn" class="btn btn-green btn-small m-l-5" style="display: none;"
+                onclick="openMultiMergeDialog()">
                 Gộp lại (<span id="select-merge-count">0</span>)
               </button>
             </div>
@@ -557,7 +559,7 @@
         </div>
         <div class="flex-justify-end flex-gap-10">
           <button class="btn btn-secondary" onclick="closeMergeFoldersModal()">Hủy</button>
-          <button class="btn btn-green" onclick="confirmMergeFolders()">Xác nhận gộp</button>
+          <button class="btn btn-green" onclick="confirmMergeFolders()">Xác nhận</button>
         </div>
       </div>
     </div>
@@ -573,7 +575,8 @@
       <div class="p-20">
         <div class="m-b-15">
           <label class="font-12 text-muted m-b-5 d-block">Các thư mục sẽ gộp:</label>
-          <div id="multi-merge-selected-list" style="background: #f1f2f6; padding: 10px; border-radius: 6px; font-size: 13px; color: #2f3542; max-height: 100px; overflow-y: auto;">
+          <div id="multi-merge-selected-list"
+            style="background: #f1f2f6; padding: 10px; border-radius: 6px; font-size: 13px; color: #2f3542; max-height: 100px; overflow-y: auto;">
           </div>
         </div>
         <div class="input-wrapper m-b-20">
@@ -588,7 +591,7 @@
         </div>
         <div class="flex-justify-end flex-gap-10">
           <button class="btn btn-secondary" onclick="closeMultiMergeModal()">Hủy</button>
-          <button class="btn btn-green" onclick="confirmMultiMergeFolders()">Xác nhận gộp</button>
+          <button class="btn btn-green" onclick="confirmMultiMergeFolders()">Xác nhận</button>
         </div>
       </div>
     </div>
