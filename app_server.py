@@ -1359,13 +1359,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
                                 new_name = f"thumb_{new_idx}.{ext}" if is_thumb else f"{new_idx}.{ext}"
                                 shutil.copy2(item_path, os.path.join(dst_dir, new_name))
 
-            # Check if any folder contains color classification subfolders
-            for info in folder_info_list:
-                for item in os.listdir(info['path']):
-                    sub_p = os.path.join(info['path'], item)
-                    if os.path.isdir(sub_p) and item != "cache_blobs" and item != "items_merged":
-                        self.send_api_response(False, f"Thư mục '{info['name']}' có chứa phân loại màu sắc ('{item}'), không thể gộp.")
-                        return
+
 
             # Build sequential mappings for all folders being merged
             mappings = [] # list of dicts

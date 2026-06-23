@@ -900,36 +900,19 @@ function initializeApp(preserveSelection = false) {
     checkbox.style.zIndex = "10";
     checkbox.style.width = "18px";
     checkbox.style.height = "18px";
-    checkbox.style.cursor = part.has_colors ? "not-allowed" : "pointer";
+    checkbox.style.cursor = "pointer";
     checkbox.style.display = selectMergeMode ? "block" : "none";
     checkbox.checked = selectedMergeFolders.includes(part.folder);
-    if (part.has_colors) {
-      checkbox.disabled = true;
-      checkbox.style.opacity = "0.5";
-    }
     checkbox.onclick = (e) => {
       e.stopPropagation();
-      if (part.has_colors) {
-        alert("Bộ phận này có mã màu, không thể gộp!");
-        checkbox.checked = false;
-        return;
-      }
       handleCheckboxClick(index, checkbox.checked);
     };
     navIcon.appendChild(checkbox);
-
-    if (selectMergeMode && part.has_colors) {
-      navIcon.style.opacity = "0.4";
-    }
 
     // Ctrl + Right-click contextmenu listener
     navIcon.addEventListener("contextmenu", (e) => {
       if (selectMergeMode) {
         e.preventDefault();
-        if (part.has_colors) {
-          alert("Bộ phận này có mã màu, không thể gộp!");
-          return;
-        }
         handleRangeSelect(index);
       }
     });
@@ -937,10 +920,6 @@ function initializeApp(preserveSelection = false) {
     navIcon.onclick = (e) => {
       if (selectMergeMode) {
         e.stopPropagation();
-        if (part.has_colors) {
-          alert("Bộ phận này có mã màu, không thể gộp!");
-          return;
-        }
         const cb = navIcon.querySelector(".merge-checkbox");
         if (cb) {
           cb.checked = !cb.checked;
@@ -4927,23 +4906,13 @@ function toggleSelectMergeMode() {
 
   // Toggle checkboxes and style display in UI
   document.querySelectorAll(".nav-icon").forEach(navEl => {
-    const partIdx = parseInt(navEl.dataset.partIndex);
-    const part = kitStructure[partIdx];
     const cb = navEl.querySelector(".merge-checkbox");
     if (cb) {
       cb.style.display = selectMergeMode ? "block" : "none";
       cb.checked = false;
+      cb.disabled = false;
     }
-    
-    if (selectMergeMode) {
-      if (part && part.has_colors) {
-        navEl.style.opacity = "0.4";
-        if (cb) cb.disabled = true;
-      }
-    } else {
-      navEl.style.opacity = "";
-      if (cb) cb.disabled = false;
-    }
+    navEl.style.opacity = "";
   });
 }
 
@@ -4989,11 +4958,6 @@ function handleRangeSelect(index) {
   for (let i = start; i <= end; i++) {
     const partIdx = currentSortedIndices[i];
     const part = kitStructure[partIdx];
-    
-    // Skip parts with colors
-    if (part && part.has_colors) {
-      continue;
-    }
     
     const navEl = document.querySelector(`.nav-icon[data-part-index="${partIdx}"]`);
     if (navEl) {
