@@ -18,6 +18,7 @@ let showColorThumb = false; // Toggle: hiển thị thumb theo màu
 let partSortType = "y"; // 'x' or 'y'
 let currentZFilter = "all"; // 'all', '1', '2'
 let debugSelectedIds = new Set();
+let currentDebugColor = null;
 let selectMergeMode = false;
 let selectedMergeFolders = [];
 let lastCheckedIndex = null;
@@ -2501,13 +2502,19 @@ function showCurrentItemLayers() {
 }
 
 // Show folder files debug modal
-async function showFolderFiles() {
+async function showFolderFiles(selectedColor) {
   if (!currentPart) return;
 
   const modal = document.getElementById("file-debug-modal");
+  const isOpening = modal.style.display !== "flex";
+  if (isOpening) {
+    currentDebugColor = null;
+  }
+
   const grid = document.getElementById("file-debug-grid");
   const subtitle = document.getElementById("file-debug-subtitle");
-
+  const listcoloritems = document.getElementById("list-color-items");
+  listcoloritems.innerHTML = "";
   modal.style.display = "flex";
   grid.innerHTML = "";
   debugSelectedIds.clear();
@@ -2516,15 +2523,23 @@ async function showFolderFiles() {
 
   try {
     // Determine color
-    // Let's try to query the active color button in the UI
-    const activeColorBtn = document.querySelector(".color-btn.active");
-    let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
-    // Fix: Check if color param is actually valid (not undefined/null string due to dataset issue)
-    // The dataset attribute is data-color-folder in loadColors function
-    const activeColorOption = document.querySelector(".color-option.active");
-    if (activeColorOption) {
-      colorParam = activeColorOption.dataset.colorFolder;
+    let colorParam = selectedColor;
+    if (!colorParam && currentDebugColor) {
+      colorParam = currentDebugColor;
     }
+    if (!colorParam) {
+      // Let's try to query the active color button in the UI
+      const activeColorBtn = document.querySelector(".color-btn.active");
+      colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+      // Fix: Check if color param is actually valid (not undefined/null string due to dataset issue)
+      // The dataset attribute is data-color-folder in loadColors function
+      const activeColorOption = document.querySelector("#color-grid .color-option.active");
+      if (activeColorOption) {
+        colorParam = activeColorOption.dataset.colorFolder;
+      }
+    }
+
+    currentDebugColor = colorParam;
 
     const params = new URLSearchParams({
       kit: CURRENT_KIT_FOLDER,
@@ -2537,8 +2552,10 @@ async function showFolderFiles() {
     );
     const result = await response.json();
 
+
     if (result.success) {
-      subtitle.textContent = `Folder: ${currentPart.part.folder} ${colorParam ? "/ " + colorParam : ""} (Tổng: ${result.files.length} files)`;
+
+      subtitle.textContent = `Folder: ${currentPart.part.folder} ${colorParam ? "/ " + colorParam : ""}`;
 
       if (result.files.length === 0) {
         grid.innerHTML =
@@ -2549,6 +2566,21 @@ async function showFolderFiles() {
       // Group files by Item ID (e.g. "1") or "nav"
       const groups = {}; // { '1': { main: file, thumb: file }, 'nav': { main: file } }
       const others = [];
+
+      currentPart.part.colors.forEach((color) => {
+        const itemCount = currentPart.part.color_image_counts
+          ? currentPart.part.color_image_counts[color] || 0
+          : 0;
+        const isActive = (color === currentDebugColor) ? "active" : "";
+        listcoloritems.innerHTML +=
+          `
+           <div class="color-option ${isActive}" onclick="switchColor('${color}')" data-color-index="0" data-color-folder="${color}" title="#${color}"
+            style="background: #${color};">
+            <div class="color-count-badge" title="${itemCount} ảnh trong folder màu này">${itemCount}</div>
+          </div>
+        `
+      });
+
 
       result.files.forEach((file) => {
         // Check for Main Image: "1.png" or "1.webp"
@@ -2575,8 +2607,8 @@ async function showFolderFiles() {
       // Clear grid but set up layout
       grid.style.display = "block";
       grid.innerHTML = `
-                        <div style="display: flex; gap: 20px; align-items: flex-start;">
-                            <div id="debug-main-list" style="flex: 10; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px;"></div>
+                        <div style="display: flex; gap: 20px; align-items: flex-start; margin-top:10px;align-items: start;">
+                            <div id="debug-main-list" style="align-items: start;flex: 10; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 15px;overflow-y: scroll;height: calc(100dvh - 200px);"></div>
                             <div id="debug-sidebar" style="flex: 2; display: flex; flex-direction: column; gap: 15px; border-left: 1px solid #444; padding-left: 20px;"></div>
                         </div>
                     `;
@@ -2604,23 +2636,23 @@ async function showFolderFiles() {
             "padding: 10px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%;";
 
           navContainer.innerHTML += `
-                                <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:5px;">
-                                    <div style="font-weight:bold; opacity: 0.7;">NAV ICON</div>
-                                    <button onclick="document.getElementById('nav-file-input').click()" style="padding:2px 8px; font-size:11px; cursor:pointer; background: #3498db; color:white; border:none; border-radius:3px;" title="Upload ảnh mới">⬆️ Upload</button>
-                                </div>
-                                <input type="file" id="nav-file-input" hidden accept="image/*" onchange="uploadNavFile(this)">
-                             `;
+            <div style="display:flex; justify-content:space-between; width:100%; align-items:center; margin-bottom:5px;">
+                <div style="font-weight:bold; opacity: 0.7;">NAV ICON</div>
+                <button onclick="document.getElementById('nav-file-input').click()" style="padding:2px 8px; font-size:11px; cursor:pointer; background: #3498db; color:white; border:none; border-radius:3px;" title="Upload ảnh mới">⬆️ Upload</button>
+            </div>
+            <input type="file" id="nav-file-input" hidden accept="image/*" onchange="uploadNavFile(this)">
+          `;
 
           if (group.main) {
             navContainer.innerHTML += `
-                                    <div class="file-debug-slot" title="${group.main.name}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:center;">
-                                        <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain; background:rgba(255,255,255,0.1); border-radius:4px;">
-                                        <div style="margin-top:5px;">${group.main.name}</div>
-                                        <div style="margin-top:8px; display:flex; justify-content:center; width:100%;">
-                                            <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;"> Xóa</button>
-                                        </div>
-                                    </div>
-                                 `;
+              <div class="file-debug-slot" title="${group.main.name}" style="position:relative; width:100%; display:flex; flex-direction:column; align-items:center;">
+                  <img src="${group.main.url}?v=${timestamp}" style="width: 100%; height: auto; object-fit: contain; background:rgba(255,255,255,0.1); border-radius:4px;">
+                  <div style="margin-top:5px;">${group.main.name}</div>
+                  <div style="margin-top:8px; display:flex; justify-content:center; width:100%;">
+                      <button onclick="deleteFile('${group.main.name}')" style="padding:4px 12px; background:#c0392b; color:white; border:none; border-radius:4px; cursor:pointer; font-size:12px;"> Xóa</button>
+                  </div>
+              </div>
+            `;
           } else {
             navContainer.innerHTML += `<div style="padding:20px; color:#666; text-align:center; border:1px dashed #444; width:100%; border-radius:4px;">Chưa có ảnh</div>`;
           }
@@ -2782,7 +2814,10 @@ function toggleDebugSelection(id, event) {
   lastDebugSelectedId = id;
   updateDebugSelectionUI();
 }
-
+function switchColor(color) {
+  currentDebugColor = color;
+  showFolderFiles(color);
+}
 function updateDebugSelectionUI() {
   const groups = document.querySelectorAll(".file-debug-group");
   groups.forEach((group) => {
@@ -2820,7 +2855,7 @@ async function deleteSelectedImages() {
 
   const targetDesc = applyAll
     ? "TẤT CẢ thư mục màu"
-    : `folder [${currentColor || "Main"}]`;
+    : `folder [${currentDebugColor || currentColor || "Main"}]`;
   if (
     !confirm(
       `Bạn chắc chắn muốn XÓA VĨNH VIỄN ${indices.length} ảnh đã chọn trong ${targetDesc} và sắp xếp lại?\n(Các thumbnail liên quan cũng sẽ bị xóa)`,
@@ -2839,7 +2874,7 @@ async function deleteSelectedImages() {
         folder: currentPart.part.folder,
         indices: indices,
         apply_all: applyAll,
-        color: currentColor,
+        color: currentDebugColor || currentColor,
       }),
     });
 
@@ -2867,11 +2902,14 @@ async function createThumbnail(sourceName, targetName) {
 
   try {
     // Get params again
-    const activeColorBtn = document.querySelector(".color-btn.active");
-    let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
-    const activeColorOption = document.querySelector(".color-option.active");
-    if (activeColorOption) {
-      colorParam = activeColorOption.dataset.colorFolder;
+    let colorParam = currentDebugColor;
+    if (!colorParam) {
+      const activeColorBtn = document.querySelector(".color-btn.active");
+      colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+      const activeColorOption = document.querySelector(".color-option.active");
+      if (activeColorOption) {
+        colorParam = activeColorOption.dataset.colorFolder;
+      }
     }
 
     // Derive ID from targetName (thumb_X.png or thumb_X.webp)
@@ -2939,10 +2977,13 @@ async function deleteFile(filename) {
 
   // showLoading('Đang xóa...');
   try {
-    const activeColorBtn = document.querySelector(".color-btn.active");
-    let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
-    const activeColorOption = document.querySelector(".color-option.active");
-    if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+    let colorParam = currentDebugColor;
+    if (!colorParam) {
+      const activeColorBtn = document.querySelector(".color-btn.active");
+      colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+      const activeColorOption = document.querySelector(".color-option.active");
+      if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+    }
 
     const response = await fetch("/api/delete_file", {
       method: "POST",
@@ -3031,10 +3072,13 @@ async function renameFile(oldName) {
 
   showLoading("Đang đổi tên...");
   try {
-    const activeColorBtn = document.querySelector(".color-btn.active");
-    let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
-    const activeColorOption = document.querySelector(".color-option.active");
-    if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+    let colorParam = currentDebugColor;
+    if (!colorParam) {
+      const activeColorBtn = document.querySelector(".color-btn.active");
+      colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+      const activeColorOption = document.querySelector(".color-option.active");
+      if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+    }
 
     const response = await fetch("/api/rename_file", {
       method: "POST",
@@ -3077,10 +3121,13 @@ async function uploadNavFile(input) {
 
     showLoading("Đang upload...");
     try {
-      const activeColorBtn = document.querySelector(".color-btn.active");
-      let colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
-      const activeColorOption = document.querySelector(".color-option.active");
-      if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+      let colorParam = currentDebugColor;
+      if (!colorParam) {
+        const activeColorBtn = document.querySelector(".color-btn.active");
+        colorParam = activeColorBtn ? activeColorBtn.dataset.color : null;
+        const activeColorOption = document.querySelector(".color-option.active");
+        if (activeColorOption) colorParam = activeColorOption.dataset.colorFolder;
+      }
 
       const response = await fetch("/api/upload_file", {
         method: "POST",
@@ -3158,7 +3205,7 @@ async function batchDeleteAndReorder() {
 
   const targetDesc = applyAll
     ? "TẤT CẢ thư mục màu"
-    : `folder [${currentColor || "Main"}]`;
+    : `folder [${currentDebugColor || currentColor || "Main"}]`;
   if (
     !confirm(
       `Bạn chắc chắn muốn XÓA VĨNH VIỄN các ảnh [${indices.join(", ")}] trong ${targetDesc} và sắp xếp lại?`,
@@ -3177,7 +3224,7 @@ async function batchDeleteAndReorder() {
         folder: currentPart.part.folder,
         indices: indices,
         apply_all: applyAll,
-        color: currentColor,
+        color: currentDebugColor || currentColor,
       }),
     });
 
