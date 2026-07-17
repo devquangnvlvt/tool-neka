@@ -636,8 +636,8 @@ async function loadKitStructure(preserveSelection = false) {
       const displayWidth = 600;
       const aspectRatio = canvasHeight / canvasWidth;
       canvas.width = displayWidth;
-      canvas.height = displayWidth * aspectRatio;
-      canvas.style.height = displayWidth * aspectRatio + "px";
+      // canvas.height = displayWidth * aspectRatio;
+      // canvas.style.height = displayWidth * aspectRatio + "px";
       // Đặt kích thước thực của canvas bằng đúng kích thước ảnh gốc (độ phân giải cao)
       //canvas.width = canvasWidth;
       //canvas.height = canvasHeight;
