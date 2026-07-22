@@ -234,6 +234,7 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
             '/api/reorder_images': self.handle_reorder_images,
             '/api/check_missing_thumbnails': self.handle_check_missing_thumbnails,
             '/api/check_corrupted_images': self.handle_check_corrupted_images,
+            '/api/check_invalid_filenames': self.handle_check_invalid_filenames,
         }
 
 
@@ -3406,6 +3407,121 @@ class KitHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             traceback.print_exc()
             self.send_api_response(False, f"Lỗi kiểm tra thumbnail: {str(e)}")
+
+
+    def handle_check_invalid_filenames(self, data):
+        """
+        Quét tất cả folder bộ phận (X-Y) của một kit.
+        Báo lỗi nếu file ảnh có tên không đúng định dạng:
+          - Hợp lệ (root / color subfolder): n.png  hoặc  n.webp  (n là số nguyên dương)
+          - Hợp lệ (root folder):           thumb_n.png  hoặc  thumb_n.webp
+          - Các file không phải ảnh (json, txt, v.v.) được bỏ qua hoàn toàn.
+          - nav.png cũng được bỏ qua (file điều hướng đặc biệt).
+        """
+        kit_folder = data.get('kit')
+        if not kit_folder:
+            self.send_api_response(False, "Missing kit parameter")
+            return
+
+        try:
+            kit_path = safe_join(DATA_DIR, kit_folder)
+            if not os.path.exists(kit_path):
+                self.send_api_response(False, "Kit not found")
+                return
+
+            IMAGE_EXTS = {'.png', '.webp', '.jpg', '.jpeg', '.gif'}
+            # Pattern: chỉ số nguyên dương, ví dụ 1.png, 12.webp
+            valid_image = re.compile(r'^\d+\.(png|webp|jpg|jpeg|gif)$', re.IGNORECASE)
+            # Pattern thumb: thumb_n.png / thumb_n.webp
+            valid_thumb = re.compile(r'^thumb_\d+\.(png|webp)$', re.IGNORECASE)
+            # Các file đặc biệt được phép tồn tại ở bất kỳ đâu
+            ALLOWED_SPECIAL = {'nav.png', 'nav.webp'}
+
+            invalid_files = []  # list of dict
+
+            part_pattern = re.compile(r'^\d+-\d+', )  # folder bộ phận: X-Y...
+
+            for part_entry in sorted(os.listdir(kit_path)):
+                part_path = os.path.join(kit_path, part_entry)
+                if not os.path.isdir(part_path):
+                    continue
+                if not part_pattern.match(part_entry):
+                    continue  # không phải folder bộ phận
+
+                # Quét file trong root của folder bộ phận
+                try:
+                    root_items = os.scandir(part_path)
+                except Exception:
+                    continue
+
+                color_dirs = []
+                with root_items:
+                    for item in root_items:
+                        if item.is_dir():
+                            color_dirs.append(item.name)
+                            continue
+                        if not item.is_file():
+                            continue
+                        fname = item.name
+                        ext = os.path.splitext(fname)[1].lower()
+                        if ext not in IMAGE_EXTS:
+                            continue  # bỏ qua file không phải ảnh
+                        if fname.lower() in ALLOWED_SPECIAL:
+                            continue
+                        # Hợp lệ nếu là n.ext HOẶC thumb_n.ext
+                        if not valid_image.match(fname) and not valid_thumb.match(fname):
+                            invalid_files.append({
+                                'part': part_entry,
+                                'color': None,       # root folder (không phải color sub)
+                                'file': fname,
+                                'location': f"{part_entry}/{fname}"
+                            })
+
+                # Quét file trong các color subfolder
+                for color_name in sorted(color_dirs):
+                    color_path = os.path.join(part_path, color_name)
+                    try:
+                        color_items = os.scandir(color_path)
+                    except Exception:
+                        continue
+                    with color_items:
+                        for cf in color_items:
+                            if not cf.is_file():
+                                continue
+                            fname = cf.name
+                            ext = os.path.splitext(fname)[1].lower()
+                            if ext not in IMAGE_EXTS:
+                                continue
+                            if fname.lower() in ALLOWED_SPECIAL:
+                                continue
+                            # Trong color folder chỉ được phép n.ext (không có thumb)
+                            if not valid_image.match(fname):
+                                invalid_files.append({
+                                    'part': part_entry,
+                                    'color': color_name,
+                                    'file': fname,
+                                    'location': f"{part_entry}/{color_name}/{fname}"
+                                })
+
+            if invalid_files:
+                print(f"⚠️  [check_invalid_filenames] Kit '{kit_folder}': {len(invalid_files)} file tên sai", flush=True)
+
+            self.send_response(200)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('X-Frame-Options', 'DENY')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.end_headers()
+            response = json.dumps({
+                "success": True,
+                "kit": kit_folder,
+                "total_invalid": len(invalid_files),
+                "invalid_files": invalid_files
+            }, ensure_ascii=False)
+            self.wfile.write(response.encode('utf-8'))
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_api_response(False, f"Lỗi kiểm tra tên file: {str(e)}")
 
 
 # ======================================================

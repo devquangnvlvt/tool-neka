@@ -518,6 +518,101 @@ async function checkCorruptedImagesForKit(kitFolder) {
   }
 }
 
+// Check for invalid image filenames (not matching n.png / thumb_n.png) in a kit
+async function checkInvalidFilenamesForKit(kitFolder) {
+  try {
+    const response = await fetch("/api/check_invalid_filenames", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kit: kitFolder }),
+    });
+    const result = await response.json();
+
+    let warningsDiv = document.getElementById("invalid-filename-warnings");
+
+    if (result.success && result.total_invalid > 0) {
+      const files = result.invalid_files;
+
+      // Group by part folder for display
+      const groupedByPart = {};
+      files.forEach(item => {
+        if (!groupedByPart[item.part]) groupedByPart[item.part] = [];
+        groupedByPart[item.part].push(item);
+      });
+
+      let detailsHTML = '';
+      Object.entries(groupedByPart).forEach(([part, items]) => {
+        detailsHTML += `<div style="margin: 6px 0;">
+          <strong style="color:#7b1fa2;">📁 ${part}</strong><br>`;
+        items.slice(0, 8).forEach(item => {
+          const location = item.color
+            ? `<span style="color:#555;">mã màu <code>${item.color}</code> → </span>`
+            : '';
+          detailsHTML += `<div style="margin-left:12px;font-size:11px;">
+            ${location}<code style="background:#f3e5f5;padding:1px 4px;border-radius:3px;color:#6a1b9a;">${item.file}</code>
+          </div>`;
+        });
+        if (items.length > 8) {
+          detailsHTML += `<div style="margin-left:12px;font-size:11px;color:#888;">... +${items.length - 8} file khác</div>`;
+        }
+        detailsHTML += `</div>`;
+      });
+
+      const notificationHTML = `
+        <div id="invalid-filename-warning-box" style="
+          background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+          border-left: 5px solid #9c27b0;
+          border-radius: 8px;
+          padding: 12px;
+          margin-bottom: 10px;
+          box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3);
+          font-family: Arial, sans-serif;
+          font-size: 12px;
+        ">
+          <div style="font-weight: bold; color: #4a148c; margin-bottom: 8px; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 16px;">🚫</span>
+            <strong>${kitFolder}</strong> – ${result.total_invalid} file có <u>tên ảnh sai định dạng</u>
+          </div>
+          <div style="font-size: 11px; color: #5e35b1; margin-bottom: 6px;">
+            Định dạng đúng: <code>n.png</code> / <code>thumb_n.png</code> (n là số). File sai:
+          </div>
+          <div style="color: #4a148c; max-height: 130px; overflow-y: auto; background: rgba(255,255,255,0.55); padding: 8px; border-radius: 4px;">
+            ${detailsHTML}
+          </div>
+        </div>
+      `;
+
+      if (!warningsDiv) {
+        warningsDiv = document.createElement("div");
+        warningsDiv.id = "invalid-filename-warnings";
+        // Ưu tiên chèn ngay bên dưới khung cảnh báo structure-warnings (chứa Lỗi Nhảy Cóc Ảnh)
+        const structWarnings = document.getElementById("structure-warnings");
+        const thumbWarnings = document.getElementById("thumbnail-warnings");
+        const targetRef = structWarnings || thumbWarnings;
+        
+        if (targetRef && targetRef.parentNode) {
+          targetRef.parentNode.insertBefore(warningsDiv, targetRef.nextSibling);
+        } else {
+          const container = document.querySelector('.container-full');
+          if (container) container.appendChild(warningsDiv);
+        }
+      }
+      warningsDiv.innerHTML = notificationHTML;
+      warningsDiv.style.display = 'block';
+
+      console.warn(`🚫 Kit "${kitFolder}" – ${result.total_invalid} file tên sai định dạng`);
+    } else {
+      // Clear nếu không có lỗi
+      if (warningsDiv) {
+        warningsDiv.innerHTML = '';
+        warningsDiv.style.display = 'none';
+      }
+    }
+  } catch (error) {
+    console.error("Error checking invalid filenames for kit:", error);
+  }
+}
+
 // Global initialization
 document.addEventListener("DOMContentLoaded", () => {
   fetchServerIP();
@@ -754,6 +849,8 @@ async function loadKitStructure(preserveSelection = false) {
       setTimeout(() => checkMissingThumbnailsForKit(CURRENT_KIT_FOLDER), 500);
       // Check for corrupted images
       setTimeout(() => checkCorruptedImagesForKit(CURRENT_KIT_FOLDER), 600);
+      // Check for invalid image filenames (tên sai định dạng)
+      setTimeout(() => checkInvalidFilenamesForKit(CURRENT_KIT_FOLDER), 700);
     } else {
       hideGlobalLoading();
       console.error("Error loading kit structure:", result.message);
