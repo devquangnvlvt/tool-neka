@@ -2,7 +2,6 @@
 let KIT_BASE_PATH = "downloads/";
 let CURRENT_KIT_FOLDER = ""; // Set dynamically
 let KIT_PATH = ""; // Set dynamically
-
 // State
 let kitStructure = null; // Changed from metadata
 let globallySelectedColors = new Set(); // Chứa các mã màu đã chọn để đồng bộ giữa các bộ phận
@@ -114,31 +113,69 @@ async function loadKitsList() {
         renderParentSelector(result.parents);
       }
 
-      // Restore parent filter if saved
-      const savedParent = localStorage.getItem("selectedParent") || "all";
-      const parentSelector = document.getElementById("parent-selector");
-      if (parentSelector) parentSelector.value = savedParent;
-      currentParentFilter = savedParent;
+      // Check URL search params for folder or kit
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawUrlParam = (urlParams.get("folder") || urlParams.get("kit") || "").trim();
 
-      if (savedParent !== "all") {
-        kits = allKits.filter((k) => k.parent === savedParent);
+      let kitToSelect = null;
+      let parentToSelect = null;
+
+      if (rawUrlParam) {
+        const decoded = decodeFolderParam(rawUrlParam);
+        const candidates = [decoded, decodeURIComponent(rawUrlParam), rawUrlParam].filter(Boolean);
+        for (const c of candidates) {
+          kitToSelect =
+            allKits.find((k) => k.folder === c) ||
+            allKits.find((k) => k.folder.toLowerCase() === c.toLowerCase()) ||
+            allKits.find((k) => k.name === c) ||
+            allKits.find((k) => k.folder.toLowerCase().endsWith("/" + c.toLowerCase())) ||
+            allKits.find((k) => k.name.toLowerCase() === c.toLowerCase());
+          if (kitToSelect) break;
+        }
+
+        if (kitToSelect) {
+          parentToSelect = kitToSelect.parent === "Mặc định (Ngoài)" ? "all" : kitToSelect.parent;
+        }
+      }
+
+      if (!kitToSelect) {
+        // Restore parent filter if saved
+        const savedParent = localStorage.getItem("selectedParent") || "all";
+        parentToSelect = savedParent;
+      }
+
+      const parentSelector = document.getElementById("parent-selector");
+      if (parentSelector && parentToSelect) {
+        parentSelector.value = parentToSelect;
+      }
+      currentParentFilter = parentToSelect || "all";
+
+      if (currentParentFilter !== "all") {
+        kits = allKits.filter((k) => k.parent === currentParentFilter);
       } else {
         kits = allKits.filter((k) => k.parent === "Mặc định (Ngoài)");
       }
 
       if (kits.length > 0) {
-        // Check localStorage for saved kit
-        let savedKit = localStorage.getItem("selectedKit");
-        // Ensure saved kit actually exists within the currently filtered parent
-        let kitToSelect =
-          savedKit && kits.find((k) => k.folder === savedKit)
-            ? kits.find((k) => k.folder === savedKit)
-            : kits[0];
+        if (!kitToSelect) {
+          // Check localStorage for saved kit
+          let savedKit = localStorage.getItem("selectedKit");
+          // Ensure saved kit actually exists within the currently filtered parent
+          kitToSelect =
+            savedKit && kits.find((k) => k.folder === savedKit)
+              ? kits.find((k) => k.folder === savedKit)
+              : kits[0];
+        }
 
         CURRENT_KIT_FOLDER = kitToSelect.folder;
         KIT_PATH = `${KIT_BASE_PATH}${CURRENT_KIT_FOLDER}/`;
 
         renderKitsSelector(kits);
+        const kitSelector = document.getElementById("kit-selector");
+        if (kitSelector) {
+          kitSelector.value = CURRENT_KIT_FOLDER;
+        }
+        updateUrlFolder(CURRENT_KIT_FOLDER);
       }
 
       loadKitStructure();
@@ -204,6 +241,7 @@ function filterByCategory(parentName) {
     }
   } else {
     // Clear current UI if no kits are found in this category
+    updateUrlFolder("");
     const navContainer = document.getElementById("nav-icons");
     const countLayer = document.getElementById("count-layer");
     const warningBox = document.getElementById("warning-box");
@@ -589,7 +627,7 @@ async function checkInvalidFilenamesForKit(kitFolder) {
         const structWarnings = document.getElementById("structure-warnings");
         const thumbWarnings = document.getElementById("thumbnail-warnings");
         const targetRef = structWarnings || thumbWarnings;
-        
+
         if (targetRef && targetRef.parentNode) {
           targetRef.parentNode.insertBefore(warningsDiv, targetRef.nextSibling);
         } else {
@@ -678,6 +716,149 @@ function filterKits(query) {
   renderKitsSelector(filtered);
 }
 
+// const FOLDER_CIPHER_KEY = "neka_art";
+
+function encodeFolderParam(text) {
+  if (!text) return "";
+  try {
+    const utf8Str = encodeURIComponent(text);
+    let obfuscated = "";
+    for (let i = 0; i < utf8Str.length; i++) {
+      obfuscated += String.fromCharCode(utf8Str.charCodeAt(i) ^ FOLDER_CIPHER_KEY.charCodeAt(i % FOLDER_CIPHER_KEY.length));
+    }
+    return btoa(obfuscated).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  } catch (e) {
+    return encodeURIComponent(text);
+  }
+}
+
+function decodeFolderParam(encoded) {
+  if (!encoded) return "";
+  try {
+    let str = encoded.replace(/-/g, '+').replace(/_/g, '/');
+    while (str.length % 4) str += '=';
+    const obfuscated = atob(str);
+    let utf8Str = "";
+    for (let i = 0; i < obfuscated.length; i++) {
+      utf8Str += String.fromCharCode(obfuscated.charCodeAt(i) ^ FOLDER_CIPHER_KEY.charCodeAt(i % FOLDER_CIPHER_KEY.length));
+    }
+    return decodeURIComponent(utf8Str);
+  } catch (e) {
+    return decodeURIComponent(encoded);
+  }
+}
+
+// Cập nhật tham số ?folder=... trên URL mà không làm reload trang
+function updateUrlFolder(folderName) {
+  try {
+    const url = new URL(window.location.href);
+    if (folderName) {
+      const encoded = encodeFolderParam(folderName);
+      if (url.searchParams.get("folder") !== encoded) {
+        url.searchParams.set("folder", encoded);
+        url.searchParams.delete("kit");
+        window.history.replaceState({ folder: folderName }, "", url.toString());
+      }
+    } else {
+      url.searchParams.delete("folder");
+      url.searchParams.delete("kit");
+      window.history.replaceState({}, "", url.toString());
+    }
+  } catch (e) {
+    console.error("Failed to update URL:", e);
+  }
+}
+
+// Sao chép link chứa param folder vào clipboard để gửi cho người khác
+function copyCurrentKitLink() {
+  if (!CURRENT_KIT_FOLDER) {
+    alert("Chưa chọn bộ sưu tập nào để copy link!");
+    return;
+  }
+  const url = new URL(window.location.href);
+  url.searchParams.set("folder", encodeFolderParam(CURRENT_KIT_FOLDER));
+  url.searchParams.delete("kit");
+  const fullUrl = url.toString();
+
+  const btn = document.getElementById("btn-copy-link");
+  const copyToClipboard = () => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(fullUrl);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = fullUrl;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      return Promise.resolve();
+    }
+  };
+
+  copyToClipboard()
+    .then(() => {
+      if (btn) {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = "✅ Đã copy!";
+        btn.style.borderColor = "#2ecc71";
+        btn.style.color = "#27ae60";
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          btn.style.borderColor = "#ddd";
+          btn.style.color = "#444";
+        }, 2000);
+      }
+    })
+    .catch(() => {
+      prompt("Sao chép link bộ sưu tập bên dưới:", fullUrl);
+    });
+}
+
+// Lắng nghe sự kiện Back/Forward của trình duyệt để đồng bộ bộ sưu tập
+window.addEventListener("popstate", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const rawParam = (urlParams.get("folder") || urlParams.get("kit") || "").trim();
+  if (rawParam && typeof allKits !== "undefined" && allKits.length > 0) {
+    const decoded = decodeFolderParam(rawParam);
+    const candidates = [decoded, decodeURIComponent(rawParam), rawParam].filter(Boolean);
+    let targetKit = null;
+    for (const c of candidates) {
+      targetKit =
+        allKits.find((k) => k.folder === c) ||
+        allKits.find((k) => k.folder.toLowerCase() === c.toLowerCase()) ||
+        allKits.find((k) => k.name === c) ||
+        allKits.find((k) => k.folder.toLowerCase().endsWith("/" + c.toLowerCase())) ||
+        allKits.find((k) => k.name.toLowerCase() === c.toLowerCase());
+      if (targetKit) break;
+    }
+
+    if (targetKit && targetKit.folder !== CURRENT_KIT_FOLDER) {
+      const parentVal = targetKit.parent === "Mặc định (Ngoài)" ? "all" : targetKit.parent;
+      const parentSelector = document.getElementById("parent-selector");
+      if (parentSelector && parentSelector.value !== parentVal) {
+        parentSelector.value = parentVal;
+        currentParentFilter = parentVal;
+        if (parentVal !== "all") {
+          kits = allKits.filter((k) => k.parent === parentVal);
+        } else {
+          kits = allKits.filter((k) => k.parent === "Mặc định (Ngoài)");
+        }
+        renderKitsSelector(kits);
+      }
+      const kitSelector = document.getElementById("kit-selector");
+      if (kitSelector) {
+        kitSelector.value = targetKit.folder;
+      }
+      switchKit(targetKit.folder);
+    }
+  }
+});
+
+window.encodeFolderParam = encodeFolderParam;
+window.decodeFolderParam = decodeFolderParam;
+window.updateUrlFolder = updateUrlFolder;
+window.copyCurrentKitLink = copyCurrentKitLink;
+
 let isLoadingKit = false;
 
 // Switch Kit
@@ -690,6 +871,9 @@ function switchKit(folderName) {
 
   // Save to localStorage
   localStorage.setItem("selectedKit", folderName);
+
+  // Update URL param
+  updateUrlFolder(folderName);
 
   // Clear search if any
   const searchInput = document.getElementById("kit-search");
@@ -2400,7 +2584,7 @@ function loadImage(src) {
 // Export character
 function exportCharacter() {
   const link = document.createElement("a");
-  link.download = "my-character.png";
+  link.download = "avatar.png";
   link.href = canvas.toDataURL();
   link.click();
 }

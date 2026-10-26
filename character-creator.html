@@ -7,6 +7,84 @@
   <title>TRÂM CMC - Local</title>
   <link rel="stylesheet" href="css/character-creator.css">
   <link rel="icon" type="image/x-icon" href="img/icon.ico">
+  <script>
+    const FOLDER_CIPHER_KEY = "neka_art";
+    function encodeFolderParam(text) {
+      if (!text) return "";
+      try {
+        const utf8Str = encodeURIComponent(text);
+        let obfuscated = "";
+        for (let i = 0; i < utf8Str.length; i++) {
+          obfuscated += String.fromCharCode(utf8Str.charCodeAt(i) ^ FOLDER_CIPHER_KEY.charCodeAt(i % FOLDER_CIPHER_KEY.length));
+        }
+        return btoa(obfuscated).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      } catch (e) {
+        return encodeURIComponent(text);
+      }
+    }
+
+    function decodeFolderParam(encoded) {
+      if (!encoded) return "";
+      try {
+        let str = encoded.replace(/-/g, '+').replace(/_/g, '/');
+        while (str.length % 4) str += '=';
+        const obfuscated = atob(str);
+        let utf8Str = "";
+        for (let i = 0; i < obfuscated.length; i++) {
+          utf8Str += String.fromCharCode(obfuscated.charCodeAt(i) ^ FOLDER_CIPHER_KEY.charCodeAt(i % FOLDER_CIPHER_KEY.length));
+        }
+        return decodeURIComponent(utf8Str);
+      } catch (e) {
+        return decodeURIComponent(encoded);
+      }
+    }
+
+    function copyCurrentKitLink() {
+      const kitSelector = document.getElementById("kit-selector");
+      const folder = (typeof CURRENT_KIT_FOLDER !== 'undefined' && CURRENT_KIT_FOLDER) || (kitSelector ? kitSelector.value : "");
+      if (!folder) {
+        alert("Chưa chọn bộ sưu tập nào để copy link!");
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.set("folder", encodeFolderParam(folder));
+      url.searchParams.delete("kit");
+      const fullUrl = url.toString();
+
+      const btn = document.getElementById("btn-copy-link");
+      const copyToClipboard = () => {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          return navigator.clipboard.writeText(fullUrl);
+        } else {
+          const textarea = document.createElement("textarea");
+          textarea.value = fullUrl;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand("copy");
+          document.body.removeChild(textarea);
+          return Promise.resolve();
+        }
+      };
+
+      copyToClipboard()
+        .then(() => {
+          if (btn) {
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = "✅ Đã copy!";
+            btn.style.borderColor = "#2ecc71";
+            btn.style.color = "#27ae60";
+            setTimeout(() => {
+              btn.innerHTML = originalHtml;
+              btn.style.borderColor = "#ddd";
+              btn.style.color = "#444";
+            }, 2000);
+          }
+        })
+        .catch(() => {
+          prompt("Sao chép link bộ sưu tập bên dưới:", fullUrl);
+        });
+    }
+  </script>
 </head>
 
 <body>
@@ -39,14 +117,19 @@
           <input type="text" id="kit-search" placeholder="Tìm bộ sưu tập..." class="kit-search-input"
             oninput="filterKits(this.value)">
         </div>
-        <div class="flex-gap-5">
-          <select id="parent-selector" onchange="filterByCategory(this.value)" style="flex: 1;border: 0.5px solid #e7e4e4;
+        <div class="flex-gap-5" style="align-items: center;">
+          <select id="parent-selector" onchange="filterByCategory(this.value)" style="height: 38px;flex: 1;border: 0.5px solid #e7e4e4;
     border-radius: 5px;">
             <option value="all">-- Tất cả mục --</option>
           </select>
           <select id="kit-selector" onchange="switchKit(this.value)" style="flex: 2;">
             <option value="">Đang tải danh sách...</option>
           </select>
+          <button type="button" id="btn-copy-link" onclick="copyCurrentKitLink()"
+            title="Sao chép link bộ sưu tập này để gửi cho người khác"
+            style="padding: 9px 12px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; font-size: 13px; font-weight: 500; border-radius: 8px; border: 1px solid #ddd; background: #fff; color: #444; cursor: pointer; transition: all 0.2s;">
+            🔗 Copy Link
+          </button>
         </div>
       </div>
     </div>
@@ -57,6 +140,9 @@
         <div class="controls">
           <button class="btn btn-secondary" onclick="randomizeCharacter()">
             Random (z)
+          </button>
+          <button class="btn btn-secondary btn-green" onclick="exportCharacter()" title="Tải avatar về máy">
+            ⬇ Tải Avatar
           </button>
           <button class="btn btn-secondary btn-red" onclick="resetAllLayers()">
             Reset (x)
@@ -596,7 +682,7 @@
     </div>
   </div>
 
-  <script src="js/character-creator.js?v=2"></script>
+  <script src="js/character-creator.js?v=4"></script>
 </body>
 
 </html>
